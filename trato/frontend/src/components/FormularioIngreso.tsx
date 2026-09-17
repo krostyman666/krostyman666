@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -14,8 +14,18 @@ const esquema = z.object({
 
 type Campos = z.infer<typeof esquema>;
 
+/**
+ * Sólo rutas de la propia app. Un `volver` absoluto dejaría que un link armado
+ * por un tercero mande al usuario a otro sitio justo después de entrar.
+ */
+function destinoSeguro(volver: string | null): string {
+  if (!volver || !volver.startsWith('/') || volver.startsWith('//')) return '/panel';
+  return volver;
+}
+
 export default function FormularioIngreso() {
   const router = useRouter();
+  const params = useSearchParams();
   const [errorServidor, setErrorServidor] = useState<string | null>(null);
 
   const {
@@ -29,7 +39,7 @@ export default function FormularioIngreso() {
     try {
       const { data } = await api.post('/auth/ingreso', datos);
       guardarToken(data.token);
-      router.push('/panel');
+      router.push(destinoSeguro(params?.get('volver') ?? null));
     } catch (error) {
       setErrorServidor(mensajeDeError(error));
     }

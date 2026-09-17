@@ -2,7 +2,7 @@ import type { RequestHandler } from 'express';
 import * as servicio from '../services/propiedades.service';
 import * as documentos from '../services/documentos.service';
 import { ErrorApi } from '../utils/ErrorApi';
-import type { TipoPropiedad } from '../models/Propiedad';
+import type { Moneda, TipoPropiedad } from '../models/Propiedad';
 
 function exigirAuth(req: Parameters<RequestHandler>[0]): string {
   if (!req.auth) throw ErrorApi.noAutorizado();
@@ -24,6 +24,7 @@ export const buscar: RequestHandler = async (req, res, next) => {
     const resultado = await servicio.buscar({
       comuna: q.comuna as string | undefined,
       tipo: q.tipo as TipoPropiedad | undefined,
+      moneda: q.moneda as Moneda | undefined,
       precioMin: q.precioMin ? Number(q.precioMin) : undefined,
       precioMax: q.precioMax ? Number(q.precioMax) : undefined,
       dormitoriosMin: q.dormitoriosMin ? Number(q.dormitoriosMin) : undefined,
@@ -47,7 +48,7 @@ export const mias: RequestHandler = async (req, res, next) => {
 
 export const obtener: RequestHandler = async (req, res, next) => {
   try {
-    const propiedad = await servicio.obtener(req.params.id);
+    const propiedad = await servicio.obtenerPublica(req.params.id);
     res.json({ propiedad });
   } catch (error) {
     next(error);
@@ -78,6 +79,7 @@ export const cambiarEstado: RequestHandler = async (req, res, next) => {
 
 export const informe: RequestHandler = async (req, res, next) => {
   try {
+    await servicio.exigirAccesoAlExpediente(req.params.id, exigirAuth(req));
     res.json(await documentos.informeDePropiedad(req.params.id));
   } catch (error) {
     next(error);

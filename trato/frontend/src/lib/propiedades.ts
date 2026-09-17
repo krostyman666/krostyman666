@@ -113,11 +113,42 @@ export interface PropiedadApi {
   dormitorios: number | null;
   banos: number | null;
   superficieConstruida: number | null;
+  fotos?: string[];
 }
+
+/** La ficha pública completa: lo que devuelve `GET /propiedades/:id`. */
+export interface PropiedadDetalle extends PropiedadApi {
+  descripcion: string | null;
+  superficieTotal: number | null;
+  estacionamientos: number;
+  bodegas: number;
+  anoConstruccion: number | null;
+  tieneHipoteca: boolean;
+  latitud: number | null;
+  longitud: number | null;
+  fotos: string[];
+  vendedor?: { nombre: string } | null;
+  createdAt: string;
+}
+
+export const ETIQUETA_TIPO: Record<string, string> = Object.fromEntries(
+  TIPOS_PROPIEDAD.map((t) => [t.valor, t.etiqueta]),
+);
 
 export function formatearPrecio(precio: number, moneda: 'clp' | 'uf'): string {
   const n = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 }).format(precio);
   return moneda === 'uf' ? `UF ${n}` : `$${n}`;
+}
+
+/**
+ * Las superficies llegan como DECIMAL de Postgres ("148.00"), así que se
+ * redondean antes de mostrarlas: nadie publica una casa de 148,00 m².
+ */
+export function formatearSuperficie(valor: number | string | null): string | null {
+  if (valor === null || valor === '') return null;
+  const n = Number(valor);
+  if (!Number.isFinite(n)) return null;
+  return `${new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 }).format(n)} m²`;
 }
 
 export function direccionCorta(p: PropiedadApi): string {

@@ -70,12 +70,20 @@ export default function MisPropiedades() {
                 <span className="text-xs tabular-nums text-tinta-tenue">
                   {listos}/{docs.length} trámites
                 </span>
-                <Link
-                  href={`/propiedades/${p.id}/documentos`}
-                  className="text-sm font-medium text-trato-600 hover:text-trato-700"
-                >
-                  Ver trámites
-                </Link>
+                <div className="flex gap-3">
+                  <Link
+                    href={`/propiedades/${p.id}/visitas`}
+                    className="text-sm font-medium text-trato-600 hover:text-trato-700"
+                  >
+                    Visitas
+                  </Link>
+                  <Link
+                    href={`/propiedades/${p.id}/documentos`}
+                    className="text-sm font-medium text-trato-600 hover:text-trato-700"
+                  >
+                    Ver trámites
+                  </Link>
+                </div>
               </div>
             </div>
           </li>
