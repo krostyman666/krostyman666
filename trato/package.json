@@ -1,0 +1,22 @@
+{
+  "name": "trato",
+  "version": "0.1.0",
+  "description": "Trato - Compra y vende propiedades directo, sin corredores",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "concurrently -n backend,frontend -c blue,green \"npm run dev -w @trato/backend\" \"npm run dev -w @trato/frontend\"",
+    "build": "npm run build -w @trato/backend && npm run build -w @trato/frontend",
+    "test": "npm test -w @trato/backend && npm test -w @trato/frontend",
+    "lint": "npm run lint -w @trato/backend && npm run lint -w @trato/frontend",
+    "db:up": "docker-compose up -d",
+    "db:down": "docker-compose down"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}

@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: trato_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-trato}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trato_local}
+      POSTGRES_DB: ${POSTGRES_DB:-trato}
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-trato}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - trato
+
+  redis:
+    image: redis:7-alpine
+    container_name: trato_redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    networks:
+      - trato
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  trato:
+    driver: bridge

@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-white text-tinta antialiased;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-trato-500 ring-offset-2;
+  }
+}
