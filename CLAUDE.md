@@ -13,9 +13,8 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 |---|---|
 | Landing con calculadora de ahorro | Listo, verificado en navegador |
 | Registro (UI + API + BD) | Listo, flujo end-to-end probado |
-| Login API | Listo (`POST /auth/ingreso`) |
-| Página `/ingresar` | Pendiente |
-| Panel `/panel` | Pendiente (el registro ya redirige ahí) |
+| Login (UI + API) | Listo, probado en navegador |
+| Panel `/panel` con guard de sesión | Listo, probado en navegador |
 | Publicar/buscar propiedades | Pendiente |
 | Wizard de compraventa, Docusign, pagos | Pendiente |
 
@@ -65,7 +64,10 @@ hay que pasar a migraciones antes del primer deploy.
 - JWT firmado con issuer `trato`, expira en 7d
 - Login compara contra un hash señuelo si el email no existe → no revela qué
   correos están registrados, ni por mensaje ni por tiempo de respuesta
-- Rate limit 10 intentos / 15 min en `/registro` y `/ingreso`
+- Rate limit 10 intentos / 15 min en `/registro` y `/ingreso`. El contador vive en
+  memoria del proceso: sirve para una instancia, pero al escalar a varias hay que
+  moverlo a Redis (ya está en docker-compose) o los límites se multiplican por
+  instancia. Además registro e ingreso comparten presupuesto por IP.
 - Validación Joi (backend) + Zod (frontend), RUT verificado en ambos lados
 - helmet, CORS restringido a `FRONTEND_URL`
 
