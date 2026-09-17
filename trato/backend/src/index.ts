@@ -6,8 +6,11 @@ import compression from 'compression';
 import { env, esProduccion } from './config/env';
 import { conectarBaseDatos, sequelize } from './config/database';
 import authRoutes from './routes/auth.routes';
+import propiedadesRoutes from './routes/propiedades.routes';
 import { manejarErrores, rutaNoEncontrada } from './middleware/manejarErrores';
 import './models/Usuario';
+import './models/Propiedad';
+import './models/Documento';
 
 const app = express();
 
@@ -28,6 +31,7 @@ app.get('/api/v1', (_req, res) => {
 });
 
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/propiedades', propiedadesRoutes);
 
 app.use(rutaNoEncontrada);
 app.use(manejarErrores);

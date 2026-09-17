@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { ArrowRight, Circle, LogOut } from 'lucide-react';
 import { useSesion } from '@/hooks/useSesion';
+import MisPropiedades from '@/components/MisPropiedades';
 
 const ETAPAS_VENDEDOR = [
   'Publicar la propiedad con fotos y valor',
@@ -76,6 +77,15 @@ export default function PanelUsuario() {
           <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
+
+      {esVendedor && (
+        <section className="mt-10">
+          <h2 className="text-lg font-semibold text-tinta">Tus propiedades</h2>
+          <div className="mt-4">
+            <MisPropiedades />
+          </div>
+        </section>
+      )}
 
       <section className="mt-10">
         <h2 className="text-lg font-semibold text-tinta">Tu compraventa, paso a paso</h2>
