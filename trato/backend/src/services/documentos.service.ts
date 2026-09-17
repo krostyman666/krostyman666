@@ -7,6 +7,7 @@ export interface ResumenEtapa {
   etapa: Etapa;
   total: number;
   recibidos: number;
+  aprobados: number;
   vencidos: number;
   completa: boolean;
 }
@@ -14,7 +15,11 @@ export interface ResumenEtapa {
 export interface Informe {
   propiedadId: string;
   totalDocumentos: number;
+  /** Papeles que tenemos, vigentes. Es lo que el vendedor controla. */
   recibidos: number;
+  /** De esos, los que la notaría revisó y aprobó. Es la puerta final. */
+  aprobados: number;
+  observados: number;
   vencidos: number;
   pendientes: number;
   avance: number;
@@ -32,18 +37,21 @@ export async function informeDePropiedad(propiedadId: string): Promise<Informe> 
   const vigentes = documentos.filter((d) => d.estado !== 'no_aplica');
 
   const recibidos = vigentes.filter((d) => d.estado === 'recibido' && !d.vencido);
+  const aprobados = vigentes.filter((d) => d.conforme);
+  const observados = vigentes.filter((d) => d.validacion === 'observado');
   const vencidos = vigentes.filter((d) => d.vencido);
 
   const porEtapa: ResumenEtapa[] = ETAPAS.map((etapa) => {
     const deEtapa = vigentes.filter((d) => POR_CODIGO.get(d.codigo)?.etapa === etapa);
     const ok = deEtapa.filter((d) => d.estado === 'recibido' && !d.vencido);
-    const mal = deEtapa.filter((d) => d.vencido);
+    const listos = deEtapa.filter((d) => d.conforme);
     return {
       etapa,
       total: deEtapa.length,
       recibidos: ok.length,
-      vencidos: mal.length,
-      completa: deEtapa.length > 0 && ok.length === deEtapa.length,
+      aprobados: listos.length,
+      vencidos: deEtapa.filter((d) => d.vencido).length,
+      completa: deEtapa.length > 0 && listos.length === deEtapa.length,
     };
   }).filter((e) => e.total > 0);
 
@@ -51,6 +59,8 @@ export async function informeDePropiedad(propiedadId: string): Promise<Informe> 
     propiedadId,
     totalDocumentos: vigentes.length,
     recibidos: recibidos.length,
+    aprobados: aprobados.length,
+    observados: observados.length,
     vencidos: vencidos.length,
     pendientes: vigentes.length - recibidos.length,
     avance: vigentes.length > 0 ? Math.round((recibidos.length / vigentes.length) * 100) : 0,

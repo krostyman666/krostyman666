@@ -1,5 +1,7 @@
 import { Router } from 'express';
+import Joi from 'joi';
 import * as controlador from '../controllers/propiedades.controller';
+import * as notarias from '../controllers/notarias.controller';
 import { autenticar } from '../middleware/autenticar';
 import { validarCuerpo } from '../middleware/validar';
 import {
@@ -8,6 +10,10 @@ import {
   cambiarEstadoSchema,
   crearPropiedadSchema,
 } from '../schemas/propiedades.schema';
+
+const asignarNotariaSchema = Joi.object({
+  notariaId: Joi.string().uuid().required(),
+});
 
 const router = Router();
 
@@ -26,6 +32,13 @@ router.patch(
 );
 
 router.get('/:id/informe', controlador.informe);
+router.get('/:id/listo-para-escriturar', notarias.listoParaEscriturar);
+router.patch(
+  '/:id/notaria',
+  autenticar,
+  validarCuerpo(asignarNotariaSchema),
+  notarias.asignarNotaria,
+);
 router.patch(
   '/documentos/:documentoId',
   autenticar,

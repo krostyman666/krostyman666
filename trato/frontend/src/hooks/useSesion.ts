@@ -11,7 +11,7 @@ export interface Usuario {
   apellido: string;
   rut: string;
   telefono: string | null;
-  rol: 'vendedor' | 'comprador' | 'asesor' | 'admin';
+  rol: 'vendedor' | 'comprador' | 'asesor' | 'notaria' | 'admin';
   emailVerificado: boolean;
 }
 

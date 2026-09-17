@@ -73,16 +73,28 @@ export interface DocumentoApi {
   vencido: boolean;
   diasParaVencer: number | null;
   costoClp: number | null;
+  validacion: 'sin_revisar' | 'en_revision' | 'aprobado' | 'observado';
+  observacionNotaria: string | null;
+  conforme: boolean;
 }
 
 export interface InformeApi {
   propiedadId: string;
   totalDocumentos: number;
   recibidos: number;
+  aprobados: number;
+  observados: number;
   vencidos: number;
   pendientes: number;
   avance: number;
-  porEtapa: { etapa: string; total: number; recibidos: number; vencidos: number; completa: boolean }[];
+  porEtapa: {
+    etapa: string;
+    total: number;
+    recibidos: number;
+    aprobados: number;
+    vencidos: number;
+    completa: boolean;
+  }[];
   documentos: DocumentoApi[];
 }
 

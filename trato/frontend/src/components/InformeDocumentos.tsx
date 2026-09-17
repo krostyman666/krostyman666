@@ -11,6 +11,21 @@ import {
   type InformeApi,
 } from '@/lib/propiedades';
 
+function textoBadge(doc: DocumentoApi): string {
+  if (doc.vencido) return 'Vencido';
+  if (doc.validacion === 'observado') return 'Observado';
+  if (doc.conforme) return 'Aprobado';
+  if (doc.estado === 'recibido') return 'En revisión';
+  return ETIQUETA_ESTADO_DOC[doc.estado] ?? doc.estado;
+}
+
+function claseBadge(doc: DocumentoApi): string {
+  if (doc.vencido || doc.validacion === 'observado') return 'bg-amber-100 text-amber-800';
+  if (doc.conforme) return 'bg-cierre-100 text-cierre-700';
+  if (doc.estado === 'recibido') return 'bg-trato-50 text-trato-700';
+  return 'bg-tinta/5 text-tinta-tenue';
+}
+
 export default function InformeDocumentos({ propiedadId }: { propiedadId: string }) {
   const [informe, setInforme] = useState<InformeApi | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +94,22 @@ export default function InformeDocumentos({ propiedadId }: { propiedadId: string
           />
         </div>
 
+        <p className="mt-3 text-sm text-tinta-tenue">
+          {informe.aprobados} {informe.aprobados === 1 ? 'aprobado' : 'aprobados'} por la notaría.
+          Tener el papel no basta: la notaría lo revisa antes de la escritura.
+        </p>
+
+        {informe.observados > 0 && (
+          <p className="mt-4 flex items-start gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              La notaría observó {informe.observados}{' '}
+              {informe.observados === 1 ? 'documento' : 'documentos'}. Mira el detalle más abajo:
+              hasta corregirlo no se puede escriturar.
+            </span>
+          </p>
+        )}
+
         {informe.vencidos > 0 && (
           <p className="mt-4 flex items-start gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -117,7 +148,7 @@ export default function InformeDocumentos({ propiedadId }: { propiedadId: string
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-2 font-medium text-tinta">
-                      {doc.estado === 'recibido' && !doc.vencido ? (
+                      {doc.conforme ? (
                         <Check className="h-4 w-4 shrink-0 text-cierre-600" />
                       ) : (
                         <FileText className="h-4 w-4 shrink-0 text-tinta/30" />
@@ -133,19 +164,17 @@ export default function InformeDocumentos({ propiedadId }: { propiedadId: string
                         {doc.comoSeObtiene}
                       </p>
                     )}
+                    {doc.validacion === 'observado' && doc.observacionNotaria && (
+                      <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+                        <span className="font-medium">La notaría observó: </span>
+                        {doc.observacionNotaria}
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex shrink-0 flex-col items-end gap-2">
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                        doc.vencido
-                          ? 'bg-amber-100 text-amber-800'
-                          : doc.estado === 'recibido'
-                            ? 'bg-cierre-100 text-cierre-700'
-                            : 'bg-tinta/5 text-tinta-tenue'
-                      }`}
-                    >
-                      {doc.vencido ? 'Vencido' : (ETIQUETA_ESTADO_DOC[doc.estado] ?? doc.estado)}
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${claseBadge(doc)}`}>
+                      {textoBadge(doc)}
                     </span>
 
                     {doc.estado === 'recibido' &&

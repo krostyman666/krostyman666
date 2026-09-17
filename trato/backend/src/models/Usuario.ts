@@ -12,7 +12,7 @@ import { esRutValido, limpiarRut } from '../utils/rut';
 
 const COSTO_BCRYPT = 12;
 
-export const ROLES = ['vendedor', 'comprador', 'asesor', 'admin'] as const;
+export const ROLES = ['vendedor', 'comprador', 'asesor', 'notaria', 'admin'] as const;
 export type Rol = (typeof ROLES)[number];
 
 export class Usuario extends Model<
@@ -27,6 +27,8 @@ export class Usuario extends Model<
   declare rut: string;
   declare telefono: string | null;
   declare rol: CreationOptional<Rol>;
+  /** Solo para usuarios con rol notaria: a qué oficina pertenecen. */
+  declare socioId: CreationOptional<string | null>;
   declare emailVerificado: CreationOptional<boolean>;
   declare createdAt: CreationOptional<Date>;
   declare updatedAt: CreationOptional<Date>;
@@ -100,6 +102,7 @@ Usuario.init(
       allowNull: false,
       defaultValue: 'comprador',
     },
+    socioId: { type: DataTypes.UUID, allowNull: true },
     emailVerificado: {
       type: DataTypes.BOOLEAN,
       allowNull: false,

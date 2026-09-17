@@ -1,6 +1,8 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowRight, Circle, LogOut } from 'lucide-react';
 import { useSesion } from '@/hooks/useSesion';
 import MisPropiedades from '@/components/MisPropiedades';
@@ -25,6 +27,11 @@ const ETAPAS_COMPRADOR = [
 
 export default function PanelUsuario() {
   const { usuario, estado, salir } = useSesion();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (usuario?.rol === 'notaria') router.replace('/notaria');
+  }, [usuario, router]);
 
   if (estado === 'cargando') {
     return (

@@ -8,6 +8,7 @@ import {
 } from 'sequelize';
 import { sequelize } from '../config/database';
 import { Usuario } from './Usuario';
+import { Socio } from './Socio';
 
 export const TIPOS_PROPIEDAD = [
   'casa',
@@ -90,6 +91,17 @@ export class Propiedad extends Model<
   declare tieneHipoteca: CreationOptional<boolean>;
   declare fotos: CreationOptional<string[]>;
 
+  /** Notaría asignada para validar el expediente y otorgar la escritura. */
+  declare notariaId: CreationOptional<string | null>;
+  /** Conservador del territorio. No se elige: depende de dónde está el inmueble. */
+  declare conservadorId: CreationOptional<string | null>;
+
+  // Partida de inscripción actual (la del vendedor). Sin foja, número y año el
+  // Conservador no puede emitir el dominio vigente ni los gravámenes.
+  declare fojas: string | null;
+  declare numeroInscripcion: string | null;
+  declare anoInscripcion: number | null;
+
   declare createdAt: CreationOptional<Date>;
   declare updatedAt: CreationOptional<Date>;
 }
@@ -144,6 +156,17 @@ Propiedad.init(
     tieneHipoteca: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     fotos: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
 
+    notariaId: { type: DataTypes.UUID, allowNull: true },
+    conservadorId: { type: DataTypes.UUID, allowNull: true },
+
+    fojas: { type: DataTypes.STRING(20), allowNull: true },
+    numeroInscripcion: { type: DataTypes.STRING(20), allowNull: true },
+    anoInscripcion: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      validate: { min: 1800, max: new Date().getFullYear() },
+    },
+
     createdAt: DataTypes.DATE,
     updatedAt: DataTypes.DATE,
   },
@@ -162,3 +185,7 @@ Propiedad.init(
 
 Usuario.hasMany(Propiedad, { foreignKey: 'vendedorId', as: 'propiedades' });
 Propiedad.belongsTo(Usuario, { foreignKey: 'vendedorId', as: 'vendedor' });
+
+Propiedad.belongsTo(Socio, { foreignKey: 'notariaId', as: 'notaria' });
+Propiedad.belongsTo(Socio, { foreignKey: 'conservadorId', as: 'conservador' });
+Usuario.belongsTo(Socio, { foreignKey: 'socioId', as: 'socio' });

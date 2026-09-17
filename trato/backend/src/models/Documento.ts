@@ -21,6 +21,14 @@ export const ESTADOS_DOCUMENTO = [
 ] as const;
 export type EstadoDocumento = (typeof ESTADOS_DOCUMENTO)[number];
 
+/**
+ * Tener el papel no basta: la notaría debe revisarlo antes de la escritura.
+ * "observado" significa que llegó pero con algo que corregir, y es distinto de
+ * "rechazado" (que lo rechazó el emisor, no la notaría).
+ */
+export const VALIDACIONES = ['sin_revisar', 'en_revision', 'aprobado', 'observado'] as const;
+export type Validacion = (typeof VALIDACIONES)[number];
+
 export class Documento extends Model<
   InferAttributes<Documento>,
   InferCreationAttributes<Documento>
@@ -36,6 +44,11 @@ export class Documento extends Model<
   declare fechaEmision: Date | null;
   declare observaciones: string | null;
   declare costoClp: number | null;
+
+  declare validacion: CreationOptional<Validacion>;
+  declare validadoPorId: CreationOptional<string | null>;
+  declare validadoEn: CreationOptional<Date | null>;
+  declare observacionNotaria: CreationOptional<string | null>;
 
   declare createdAt: CreationOptional<Date>;
   declare updatedAt: CreationOptional<Date>;
@@ -55,6 +68,11 @@ export class Documento extends Model<
     return Math.ceil(def.vigenciaDias - dias);
   }
 
+  /** Listo de verdad: lo tenemos, está vigente y la notaría lo aprobó. */
+  get conforme(): NonAttribute<boolean> {
+    return this.estado === 'recibido' && !this.vencido && this.validacion === 'aprobado';
+  }
+
   toJSON(): Record<string, unknown> {
     const def = POR_CODIGO.get(this.codigo);
     return {
@@ -66,6 +84,7 @@ export class Documento extends Model<
       comoSeObtiene: def?.comoSeObtiene ?? null,
       vencido: this.vencido,
       diasParaVencer: this.diasParaVencer,
+      conforme: this.conforme,
     };
   }
 }
@@ -84,6 +103,14 @@ Documento.init(
     fechaEmision: { type: DataTypes.DATE, allowNull: true },
     observaciones: { type: DataTypes.TEXT, allowNull: true },
     costoClp: { type: DataTypes.INTEGER, allowNull: true },
+    validacion: {
+      type: DataTypes.ENUM(...VALIDACIONES),
+      allowNull: false,
+      defaultValue: 'sin_revisar',
+    },
+    validadoPorId: { type: DataTypes.UUID, allowNull: true },
+    validadoEn: { type: DataTypes.DATE, allowNull: true },
+    observacionNotaria: { type: DataTypes.TEXT, allowNull: true },
     createdAt: DataTypes.DATE,
     updatedAt: DataTypes.DATE,
   },
@@ -98,6 +125,19 @@ Documento.init(
     ],
   },
 );
+
+// Si cambia el archivo o la fecha de emisión, es otro papel: lo que la notaría
+// aprobó antes ya no es lo que está en el expediente, así que vuelve a revisión.
+Documento.addHook('beforeUpdate', (documento) => {
+  const doc = documento as Documento;
+  const reemplazado = doc.changed('archivoUrl') || doc.changed('fechaEmision');
+  if (reemplazado && !doc.changed('validacion')) {
+    doc.set('validacion', 'sin_revisar');
+    doc.set('validadoPorId', null);
+    doc.set('validadoEn', null);
+    doc.set('observacionNotaria', null);
+  }
+});
 
 Propiedad.hasMany(Documento, { foreignKey: 'propiedadId', as: 'documentos' });
 Documento.belongsTo(Propiedad, { foreignKey: 'propiedadId', as: 'propiedad' });
