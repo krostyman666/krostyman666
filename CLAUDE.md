@@ -18,6 +18,7 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Publicar propiedad + expediente de documentos | Listo, probado en navegador |
 | Búsqueda de propiedades (API) | Listo; falta la UI pública |
 | Subida de archivos de documentos | Pendiente |
+| Notaría como actor: bandeja y validación | Listo, probado en navegador |
 | Integraciones externas | Pendiente — ver doc de integraciones |
 
 ## Estructura
@@ -82,7 +83,12 @@ transacción, filtrado por las condiciones del caso (departamento suma gastos
 comunes; propiedad hipotecada suma el alzamiento; compra con crédito suma
 tasación y aprobación).
 
-Dos reglas que no son obvias y conviene no romper:
+Un documento tiene **dos ejes independientes**: `estado` (si tenemos el papel) y
+`validacion` (si la notaría lo revisó). `conforme` exige los tres: recibido,
+vigente y aprobado. Contar solo `recibido` como "listo" es un error: el vendedor
+puede tener todos los papeles y aun así no poder escriturar.
+
+Cuatro reglas que no son obvias y conviene no romper:
 
 - **Los certificados vencen.** Dominio vigente y gravámenes duran ~30 días. Si
   la operación se alarga caducan antes de firmar y hay que pedirlos de nuevo.
@@ -90,6 +96,11 @@ Dos reglas que no son obvias y conviene no romper:
   vencimiento se calcula y se muestra, no se esconde.
 - **La escritura pública no se automatiza.** Por ley chilena va ante notario.
   El sistema la orquesta; nunca la presentes como firma electrónica.
+- **Reemplazar un documento anula su aprobación.** Está como hook `beforeUpdate`
+  en el modelo, no en el servicio, para que no dependa de por dónde entre el
+  cambio. Sin eso se podía hacer aprobar un papel y cambiarlo después.
+- **Observar exige motivo.** Una observación sin explicación deja al vendedor
+  bloqueado sin saber qué corregir.
 
 Los plazos de vigencia del catálogo llevan advertencia en el archivo: hay que
 confirmarlos con abogado antes de producción.
@@ -112,8 +123,19 @@ PATCH /api/v1/propiedades/:id                Bearer (solo el dueño)
 PATCH /api/v1/propiedades/:id/estado         Bearer (solo el dueño)
 GET   /api/v1/propiedades/:id/informe        → avance, porEtapa, documentos
 PATCH /api/v1/propiedades/documentos/:docId  Bearer (solo el dueño)
+PATCH /api/v1/propiedades/:id/notaria        Bearer (solo el dueño)
+GET   /api/v1/propiedades/:id/listo-para-escriturar
 GET   /api/v1/propiedades/catalogo-documentos
+
+GET   /api/v1/notarias                       ?tipo=notaria|conservador&comuna
+GET   /api/v1/notarias/bandeja               Bearer, rol notaria
+PATCH /api/v1/notarias/documentos/:docId/validacion   Bearer, rol notaria
 ```
+
+Datos de prueba de notarías: `npx ts-node --transpile-only src/scripts/seed-socios.ts`
+desde `trato/backend`. Crea dos notarías con usuario (clave `clave-notaria-1`).
+Los nombres son ficticios: al incorporar oficinas reales hay que cargarlas desde
+su nómina oficial.
 
 ## Verificación antes de dar algo por listo
 
