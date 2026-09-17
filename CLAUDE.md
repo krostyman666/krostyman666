@@ -15,8 +15,10 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Registro (UI + API + BD) | Listo, flujo end-to-end probado |
 | Login (UI + API) | Listo, probado en navegador |
 | Panel `/panel` con guard de sesión | Listo, probado en navegador |
-| Publicar/buscar propiedades | Pendiente |
-| Wizard de compraventa, Docusign, pagos | Pendiente |
+| Publicar propiedad + expediente de documentos | Listo, probado en navegador |
+| Búsqueda de propiedades (API) | Listo; falta la UI pública |
+| Subida de archivos de documentos | Pendiente |
+| Integraciones externas | Pendiente — ver doc de integraciones |
 
 ## Estructura
 
@@ -71,14 +73,46 @@ hay que pasar a migraciones antes del primer deploy.
 - Validación Joi (backend) + Zod (frontend), RUT verificado en ambos lados
 - helmet, CORS restringido a `FRONTEND_URL`
 
+## El dominio: expediente de documentos
+
+`backend/src/dominio/documentos.catalogo.ts` es el núcleo del producto. Define
+los documentos de una compraventa chilena con emisor, responsable, etapa y
+vigencia. Al crear una propiedad se genera su expediente completo en la misma
+transacción, filtrado por las condiciones del caso (departamento suma gastos
+comunes; propiedad hipotecada suma el alzamiento; compra con crédito suma
+tasación y aprobación).
+
+Dos reglas que no son obvias y conviene no romper:
+
+- **Los certificados vencen.** Dominio vigente y gravámenes duran ~30 días. Si
+  la operación se alarga caducan antes de firmar y hay que pedirlos de nuevo.
+  Esa fricción es la que la plataforma existe para absorber, así que el
+  vencimiento se calcula y se muestra, no se esconde.
+- **La escritura pública no se automatiza.** Por ley chilena va ante notario.
+  El sistema la orquesta; nunca la presentes como firma electrónica.
+
+Los plazos de vigencia del catálogo llevan advertencia en el archivo: hay que
+confirmarlos con abogado antes de producción.
+
 ## API
 
 ```
-GET  /health
-GET  /api/v1
-POST /api/v1/auth/registro   { email, password, nombre, apellido, rut, telefono?, rol }
-POST /api/v1/auth/ingreso    { email, password }        → { token, usuario }
-GET  /api/v1/auth/perfil     Authorization: Bearer ...  → { usuario }
+GET   /health
+GET   /api/v1
+
+POST  /api/v1/auth/registro   { email, password, nombre, apellido, rut, telefono?, rol }
+POST  /api/v1/auth/ingreso    { email, password }        → { token, usuario }
+GET   /api/v1/auth/perfil     Bearer                     → { usuario }
+
+GET   /api/v1/propiedades                    ?comuna&tipo&precioMin&precioMax&dormitoriosMin&pagina
+GET   /api/v1/propiedades/mias               Bearer
+POST  /api/v1/propiedades                    Bearer
+GET   /api/v1/propiedades/:id
+PATCH /api/v1/propiedades/:id                Bearer (solo el dueño)
+PATCH /api/v1/propiedades/:id/estado         Bearer (solo el dueño)
+GET   /api/v1/propiedades/:id/informe        → avance, porEtapa, documentos
+PATCH /api/v1/propiedades/documentos/:docId  Bearer (solo el dueño)
+GET   /api/v1/propiedades/catalogo-documentos
 ```
 
 ## Verificación antes de dar algo por listo
@@ -96,3 +130,4 @@ Para cambios de UI: levantar y mirarlo en el navegador, no sólo compilar.
 - Hub de proyectos: https://claude.ai/code/artifact/daf59f43-87df-4136-81f5-40a717d8298e
 - Plan técnico: https://claude.ai/code/artifact/76d11eac-7f10-4019-b112-dc725aea9c6a
 - Estrategia comercial: https://claude.ai/code/artifact/7caf8be7-315c-479f-8df5-6b7ab08ff35c
+- Integraciones (qué se puede conectar y qué no): https://claude.ai/code/artifact/a4639f81-e2af-4945-8150-43bd4a1970ca
