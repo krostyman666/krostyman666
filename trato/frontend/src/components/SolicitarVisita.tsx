@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { CalendarCheck, CalendarX, Check, Clock } from 'lucide-react';
 import { api, leerToken, mensajeDeError } from '@/lib/api';
 import {
-  formatearDia,
+  formatearDiaCompacto,
   formatearDiaDeInstante,
   formatearHora,
   formatearRango,
@@ -154,6 +154,7 @@ export default function SolicitarVisita({ propiedadId, comuna }: Props) {
   }
 
   const cupos = dias.find((d) => d.dia === diaElegido)?.cupos ?? [];
+  const grupal = dias.some((d) => d.cupos.some((c) => c.lugares > 1));
 
   return (
     <div className="rounded-2xl border border-tinta/10 bg-white p-6 shadow-carta">
@@ -180,7 +181,7 @@ export default function SolicitarVisita({ propiedadId, comuna }: Props) {
                   : 'text-tinta-suave ring-1 ring-tinta/15 hover:ring-tinta/30'
               }`}
             >
-              {formatearDia(d.dia)}
+              {formatearDiaCompacto(d.dia)}
             </button>
           ))}
         </div>
@@ -201,12 +202,19 @@ export default function SolicitarVisita({ propiedadId, comuna }: Props) {
               }`}
             >
               {formatearHora(c.inicio)}
+              {c.lugares > 1 && (
+                <span className="mt-0.5 block text-[11px] font-normal opacity-75">
+                  {c.lugares - c.ocupados} de {c.lugares}
+                </span>
+              )}
             </button>
           ))}
         </div>
         <p className="mt-2 flex items-center gap-1.5 text-xs text-tinta-tenue">
           <Clock className="h-3.5 w-3.5" />
-          Cada visita dura 45 minutos.
+          {grupal
+            ? 'Visita guiada de 45 minutos, con otros interesados.'
+            : 'Cada visita dura 45 minutos.'}
         </p>
       </div>
 

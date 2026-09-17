@@ -19,6 +19,7 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Búsqueda pública `/propiedades` con filtros | Listo, probado en navegador |
 | Ficha pública `/propiedades/:id` con galería y mapa | Listo, probado en navegador |
 | Agendamiento de visitas (disponibilidad + cupos + reserva) | Listo, probado en navegador |
+| Visita individual u open house, a elección del vendedor | Listo, probado en navegador |
 | Agenda del asesor y asignación por comuna | Listo, probado en navegador |
 | Notaría como actor: bandeja y validación | Listo, probado en navegador |
 | Bot de preguntas del comprador | Pendiente — decisión de alcance abierta |
@@ -125,12 +126,14 @@ confirmarlos con abogado antes de producción.
 
 ## La ficha pública y el límite con el expediente
 
-`GET /propiedades/:id` no lleva sesión, así que devuelve `obtenerPublica`: sin
-documentos, sin foja/número/año de inscripción y sin rol de avalúo. Antes servía
-el expediente completo, lo que exponía al vendedor y además regalaba lo que el
-comprador debería pagar en el informe. `/:id/informe` exige sesión y pasa por
-`exigirAccesoAlExpediente`: dueño, notaría a cargo de esa operación, o equipo
-interno. Un comprador no, ni con sesión.
+`GET /propiedades/:id` pasa por `autenticarOpcional`: sin sesión devuelve
+`obtenerPublica` —sin documentos, sin foja/número/año de inscripción y sin rol
+de avalúo— y al dueño o al equipo interno les devuelve la ficha completa, para
+que pueda abrir su propia propiedad en borrador sin recibir un 404. Antes servía
+el expediente a cualquiera, lo que exponía al vendedor y además regalaba lo que
+el comprador debería pagar en el informe. `/:id/informe` sí exige sesión y pasa
+por `exigirAccesoAlExpediente`: dueño, notaría a cargo de esa operación, o
+equipo interno. Un comprador no, ni con sesión.
 
 La dirección exacta tampoco va en la ficha. `MapaPropiedad` dibuja un círculo de
 sector y sólo marca el punto con `exacta`, que se usa una vez confirmada la
@@ -143,7 +146,21 @@ El vendedor declara ventanas semanales (`disponibilidad_visitas`, hora de pared
 chilena). De ahí salen cupos de 45 minutos cada 60, y esos 15 de diferencia son
 el traslado del asesor: por eso los cupos de una misma propiedad quedan pegados.
 
-Cuatro cosas que conviene no romper:
+`Propiedad.visitantesPorCupo` decide la modalidad: 1 es visita individual, más
+de 1 es open house. Es la palanca más grande de costo por visita —un viaje del
+asesor atendiendo a cuatro compradores en vez de uno— y la elige el vendedor,
+porque hay quien no quiere grupos en su casa. Trae tres consecuencias que ya
+están cubiertas y conviene no deshacer:
+
+- **El cupo se ofrece mientras `ocupados < lugares`**, no mientras esté vacío.
+- **Un comprador no puede tomar dos lugares del mismo bloque.** Con capacidad
+  mayor a 1 el cupo sigue disponible después de que él reservó, así que hace
+  falta el chequeo explícito por comprador (`visita_repetida`).
+- **El choque de agenda del asesor sólo aplica entre propiedades distintas.**
+  Dos visitas a la misma hora en la misma propiedad son el open house
+  funcionando; en propiedades distintas es imposible y se rechaza.
+
+Cuatro cosas más que conviene no romper:
 
 - **Las horas se calculan pasando por `America/Santiago`**, en
   `backend/src/utils/tiempo.ts`. Chile cambia de horario en septiembre y abril;
@@ -174,7 +191,7 @@ GET   /api/v1/auth/perfil     Bearer                     → { usuario }
 GET   /api/v1/propiedades                    ?comuna&tipo&moneda&precioMin&precioMax&dormitoriosMin&pagina
 GET   /api/v1/propiedades/mias               Bearer
 POST  /api/v1/propiedades                    Bearer
-GET   /api/v1/propiedades/:id                ficha pública, sin expediente
+GET   /api/v1/propiedades/:id                ficha pública; completa si eres el dueño
 PATCH /api/v1/propiedades/:id                Bearer (solo el dueño)
 PATCH /api/v1/propiedades/:id/estado         Bearer (solo el dueño)
 GET   /api/v1/propiedades/:id/informe        Bearer (dueño, su notaría o interno)
@@ -183,7 +200,7 @@ PATCH /api/v1/propiedades/:id/notaria        Bearer (solo el dueño)
 GET   /api/v1/propiedades/:id/listo-para-escriturar   Bearer
 GET   /api/v1/propiedades/catalogo-documentos
 
-GET   /api/v1/propiedades/:id/cupos          → dias[{ dia, cupos[{ inicio, fin }] }]
+GET   /api/v1/propiedades/:id/cupos          → dias[{ dia, cupos[{ inicio, fin, lugares, ocupados }] }]
 GET   /api/v1/propiedades/:id/disponibilidad
 PUT   /api/v1/propiedades/:id/disponibilidad Bearer (solo el dueño)  { bloques }
 POST  /api/v1/propiedades/:id/visitas        Bearer  { inicio, mensaje? }
@@ -215,6 +232,31 @@ npm run build -w @trato/backend && npm run build -w @trato/frontend
 ```
 
 Para cambios de UI: levantar y mirarlo en el navegador, no sólo compilar.
+
+## Decidido, todavía por construir
+
+Cuatro definiciones tomadas para las etapas que siguen. No volver a discutirlas
+sin el dueño del producto:
+
+- **El informe va en dos niveles.** Uno instantáneo y gratis, armado sólo con lo
+  automatizable (avalúo del SII por rol, datos de la publicación), que sirve de
+  gancho; y uno pagado con los certificados reales del Conservador, con plazo de
+  2 a 5 días hábiles. Eso obliga a un estado "en preparación" y a avisarle al
+  comprador: no hay API de Conservador, los ~80 son independientes y casi
+  ninguno tiene servicio digital. El nivel gratis nunca puede presentarse como
+  estudio de títulos.
+- **La modalidad de visita la elige el vendedor por propiedad.** Ya construido.
+- **La promesa se firma con DocuSign**, aprovechando las llaves que ya están en
+  `.env.example`. Ojo con el límite legal: DocuSign por sí solo no entrega firma
+  electrónica avanzada reconocida en Chile, así que si la promesa necesita valor
+  probatorio fuerte hay que sumar un socio local. Y la compraventa definitiva no
+  se firma electrónicamente en ningún caso: va por escritura pública ante
+  notario.
+- **El bot responde la publicación y el proceso, nada legal.** Metros,
+  orientación, gastos comunes, cómo funciona la comisión. Estado legal, precio o
+  documentos derivan al informe o a una persona: afirmar que una propiedad no
+  tiene hipoteca es una declaración material en una compraventa. Es además el
+  embudo natural hacia el informe pagado.
 
 ## Documentos de estrategia
 

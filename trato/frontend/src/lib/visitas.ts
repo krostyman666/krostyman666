@@ -13,6 +13,9 @@ export const DIAS_SEMANA = [
 export interface Cupo {
   inicio: string;
   fin: string;
+  /** Capacidad del cupo: 1 en visita individual, más en open house. */
+  lugares: number;
+  ocupados: number;
 }
 
 export interface DiaConCupos {
@@ -75,10 +78,11 @@ const diaLargo = new Intl.DateTimeFormat('es-CL', {
   month: 'long',
 });
 
-const diaCorto = new Intl.DateTimeFormat('es-CL', {
+const diaCompacto = new Intl.DateTimeFormat('es-CL', {
   timeZone: ZONA_CHILE,
-  day: '2-digit',
-  month: '2-digit',
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
 });
 
 /** Siempre en hora de Chile: el comprador puede estar mirando desde afuera. */
@@ -100,8 +104,9 @@ export function formatearDiaDeInstante(iso: string): string {
   return diaLargo.format(new Date(iso));
 }
 
-export function formatearDiaCorto(iso: string): string {
-  return diaCorto.format(new Date(iso));
+/** "sáb, 19 sept" — para los chips del selector, donde el nombre largo no cabe. */
+export function formatearDiaCompacto(diaIso: string): string {
+  return diaCompacto.format(new Date(`${diaIso}T12:00:00Z`));
 }
 
 export function formatearRango(inicio: string, fin: string): string {

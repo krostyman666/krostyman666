@@ -19,6 +19,23 @@ export const autenticar: RequestHandler = (req, _res, next) => {
   }
 };
 
+/**
+ * Para rutas públicas que muestran más si hay sesión: el dueño abriendo su
+ * propia ficha en borrador, por ejemplo. Un token vencido o roto no rompe la
+ * página, simplemente se atiende como visitante anónimo.
+ */
+export const autenticarOpcional: RequestHandler = (req, _res, next) => {
+  const header = req.headers.authorization;
+  if (header?.startsWith('Bearer ')) {
+    try {
+      req.auth = verificarToken(header.slice(7));
+    } catch {
+      /* se sigue como anónimo */
+    }
+  }
+  next();
+};
+
 export function exigirRol(...roles: Rol[]): RequestHandler {
   return (req, _res, next) => {
     if (!req.auth || !roles.includes(req.auth.rol)) {

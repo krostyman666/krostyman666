@@ -3,7 +3,7 @@ import Joi from 'joi';
 import * as controlador from '../controllers/propiedades.controller';
 import * as notarias from '../controllers/notarias.controller';
 import * as visitas from '../controllers/visitas.controller';
-import { autenticar } from '../middleware/autenticar';
+import { autenticar, autenticarOpcional } from '../middleware/autenticar';
 import { validarCuerpo } from '../middleware/validar';
 import {
   actualizarDocumentoSchema,
@@ -24,7 +24,7 @@ router.get('/', controlador.buscar);
 router.get('/mias', autenticar, controlador.mias);
 router.post('/', autenticar, validarCuerpo(crearPropiedadSchema), controlador.crear);
 
-router.get('/:id', controlador.obtener);
+router.get('/:id', autenticarOpcional, controlador.obtener);
 router.patch('/:id', autenticar, validarCuerpo(actualizarPropiedadSchema), controlador.actualizar);
 router.patch(
   '/:id/estado',

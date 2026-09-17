@@ -129,6 +129,23 @@ export async function obtenerPublica(id: string): Promise<Propiedad> {
 }
 
 /**
+ * Lo mismo que `obtenerPublica`, salvo para quien tiene derecho a ver todo: así
+ * el dueño puede abrir su propia ficha aunque esté en borrador, y no se le
+ * responde 404 sobre su propia propiedad.
+ */
+export async function obtenerParaVisitante(
+  id: string,
+  usuarioId: string,
+): Promise<Propiedad> {
+  try {
+    await exigirAccesoAlExpediente(id, usuarioId);
+  } catch {
+    return obtenerPublica(id);
+  }
+  return obtener(id);
+}
+
+/**
  * Quién puede ver el expediente: el dueño, la notaría a cargo de esa operación
  * y el equipo interno. Un comprador no, ni siquiera con sesión.
  */

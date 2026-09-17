@@ -31,6 +31,9 @@ export const DIAS_VENTANA = 14;
 export interface Cupo {
   inicio: string;
   fin: string;
+  /** Capacidad del cupo: 1 en visita individual, más en open house. */
+  lugares: number;
+  ocupados: number;
 }
 
 export interface DiaConCupos {
@@ -98,6 +101,13 @@ export async function cuposDisponibles(
   propiedadId: string,
   dias = DIAS_VENTANA,
 ): Promise<DiaConCupos[]> {
+  const propiedad = await Propiedad.findByPk(propiedadId, {
+    attributes: ['id', 'visitantesPorCupo'],
+  });
+  if (!propiedad) throw ErrorApi.noEncontrado('Propiedad no encontrada');
+
+  const lugares = propiedad.visitantesPorCupo;
+
   const ventanas = await disponibilidadDe(propiedadId);
   if (ventanas.length === 0) return [];
 
@@ -140,10 +150,10 @@ export async function cuposDisponibles(
         if (inicio < desde) continue;
 
         const fin = new Date(inicio.getTime() + DURACION_VISITA_MIN * 60_000);
-        const choca = tomadas.some((t) => inicio < t.fin && t.inicio < fin);
-        if (choca) continue;
+        const ocupados = tomadas.filter((t) => inicio < t.fin && t.inicio < fin).length;
+        if (ocupados >= lugares) continue;
 
-        cupos.push({ inicio: inicio.toISOString(), fin: fin.toISOString() });
+        cupos.push({ inicio: inicio.toISOString(), fin: fin.toISOString(), lugares, ocupados });
       }
     }
 
@@ -189,6 +199,21 @@ export async function solicitar(
     const libre = agenda.some((d) => d.cupos.some((c) => c.inicio === inicio.toISOString()));
     if (!libre) {
       throw ErrorApi.conflicto('Ese horario ya no está disponible', 'cupo_tomado');
+    }
+
+    // En open house el cupo queda disponible aunque este comprador ya lo tomó,
+    // así que sin este chequeo podría reservar dos lugares del mismo bloque.
+    const yaVa = await Visita.findOne({
+      where: {
+        propiedadId,
+        compradorId,
+        inicio,
+        estado: { [Op.in]: ESTADOS_VISITA_ACTIVOS },
+      },
+      transaction: t,
+    });
+    if (yaVa) {
+      throw ErrorApi.conflicto('Ya tienes una visita reservada a esa hora', 'visita_repetida');
     }
 
     return Visita.create(
@@ -316,17 +341,24 @@ export async function asignarAsesor(visitaId: string, asesorId: string): Promise
     throw ErrorApi.solicitudInvalida('Ese usuario no es un asesor');
   }
 
+  // Dos visitas a la misma hora sólo son un choque si son de propiedades
+  // distintas: en open house el asesor muestra a varios compradores a la vez,
+  // y eso es el punto.
   const choque = await Visita.findOne({
     where: {
       asesorId,
       id: { [Op.ne]: visitaId },
+      propiedadId: { [Op.ne]: visita.propiedadId },
       estado: { [Op.in]: ESTADOS_VISITA_ACTIVOS },
       inicio: { [Op.lt]: visita.fin },
       fin: { [Op.gt]: visita.inicio },
     },
   });
   if (choque) {
-    throw ErrorApi.conflicto('El asesor ya tiene una visita a esa hora', 'asesor_ocupado');
+    throw ErrorApi.conflicto(
+      'El asesor ya tiene una visita en otra propiedad a esa hora',
+      'asesor_ocupado',
+    );
   }
 
   return visita.update({ asesorId, estado: 'confirmada' });

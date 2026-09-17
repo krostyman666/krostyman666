@@ -91,6 +91,13 @@ export class Propiedad extends Model<
   declare tieneHipoteca: CreationOptional<boolean>;
   declare fotos: CreationOptional<string[]>;
 
+  /**
+   * Cuántos compradores caben en un mismo cupo de visita. 1 es visita
+   * individual; más de 1 es open house, que es lo que hace rendir el viaje del
+   * asesor. Lo elige el vendedor: hay quien no quiere grupos en su casa.
+   */
+  declare visitantesPorCupo: CreationOptional<number>;
+
   /** Notaría asignada para validar el expediente y otorgar la escritura. */
   declare notariaId: CreationOptional<string | null>;
   /** Conservador del territorio. No se elige: depende de dónde está el inmueble. */
@@ -155,6 +162,13 @@ Propiedad.init(
 
     tieneHipoteca: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     fotos: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+
+    visitantesPorCupo: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1,
+      validate: { min: 1, max: 10 },
+    },
 
     notariaId: { type: DataTypes.UUID, allowNull: true },
     conservadorId: { type: DataTypes.UUID, allowNull: true },

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Cabecera from '@/components/Cabecera';
 import DisponibilidadPropiedad from '@/components/DisponibilidadPropiedad';
+import ModalidadVisita from '@/components/ModalidadVisita';
 import VisitasDePropiedad from '@/components/VisitasDePropiedad';
 
 export const metadata: Metadata = {
@@ -21,6 +22,13 @@ export default async function VisitasPage({ params }: { params: Promise<{ id: st
         </p>
 
         <section className="mt-8">
+          <h2 className="text-lg font-semibold text-tinta">Cómo quieres mostrarla</h2>
+          <div className="mt-3">
+            <ModalidadVisita propiedadId={id} />
+          </div>
+        </section>
+
+        <section className="mt-12">
           <h2 className="text-lg font-semibold text-tinta">Cuándo se puede visitar</h2>
           <div className="mt-3">
             <DisponibilidadPropiedad propiedadId={id} />

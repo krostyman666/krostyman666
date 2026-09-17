@@ -17,6 +17,31 @@ const COLOR_ESTADO: Record<string, string> = {
   no_asistio: 'bg-amber-50 text-amber-700',
 };
 
+interface Bloque {
+  inicio: string;
+  fin: string;
+  visitas: VisitaApi[];
+}
+
+/**
+ * En open house varias visitas comparten la hora, así que se muestran como un
+ * bloque: repetir la fecha y la hora en cada tarjeta era ilegible en cuanto el
+ * vendedor recibía cuatro personas por cupo.
+ */
+function agrupar(visitas: VisitaApi[]): Bloque[] {
+  const bloques = new Map<string, Bloque>();
+  for (const visita of visitas) {
+    const bloque = bloques.get(visita.inicio) ?? {
+      inicio: visita.inicio,
+      fin: visita.fin,
+      visitas: [],
+    };
+    bloque.visitas.push(visita);
+    bloques.set(visita.inicio, bloque);
+  }
+  return [...bloques.values()].sort((a, b) => a.inicio.localeCompare(b.inicio));
+}
+
 export default function VisitasDePropiedad({ propiedadId }: { propiedadId: string }) {
   const [visitas, setVisitas] = useState<VisitaApi[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,36 +65,49 @@ export default function VisitasDePropiedad({ propiedadId }: { propiedadId: strin
   }
 
   return (
-    <ul className="space-y-2">
-      {visitas.map((v) => (
-        <li key={v.id} className="rounded-xl border border-tinta/10 bg-white p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="font-medium text-tinta first-letter:uppercase">
-                {formatearDiaDeInstante(v.inicio)}
-              </p>
-              <p className="mt-0.5 text-sm tabular-nums text-tinta-tenue">
-                {formatearRango(v.inicio, v.fin)}
-              </p>
-              {v.comprador && (
-                <p className="mt-1.5 text-sm text-tinta-suave">
-                  {v.comprador.nombre} {v.comprador.apellido}
-                </p>
-              )}
-              {v.mensaje && (
-                <p className="mt-2 rounded-lg bg-tinta/[0.03] px-3 py-2 text-sm text-tinta-suave">
-                  {v.mensaje}
-                </p>
-              )}
-            </div>
-            <span
-              className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
-                COLOR_ESTADO[v.estado] ?? 'bg-tinta/5 text-tinta-suave'
-              }`}
-            >
-              {ETIQUETA_ESTADO_VISITA[v.estado] ?? v.estado}
-            </span>
+    <ul className="space-y-3">
+      {agrupar(visitas).map((bloque) => (
+        <li key={bloque.inicio} className="rounded-xl border border-tinta/10 bg-white p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <p className="font-medium text-tinta first-letter:uppercase">
+              {formatearDiaDeInstante(bloque.inicio)}
+              <span className="ml-2 text-sm font-normal tabular-nums text-tinta-tenue">
+                {formatearRango(bloque.inicio, bloque.fin)}
+              </span>
+            </p>
+            {bloque.visitas.length > 1 && (
+              <span className="text-sm text-tinta-tenue">
+                {bloque.visitas.length} personas
+              </span>
+            )}
           </div>
+
+          <ul className="mt-3 space-y-2">
+            {bloque.visitas.map((v) => (
+              <li
+                key={v.id}
+                className="flex flex-wrap items-start justify-between gap-3 rounded-lg bg-tinta/[0.02] px-3 py-2.5"
+              >
+                <div className="min-w-0">
+                  {v.comprador && (
+                    <p className="text-sm font-medium text-tinta">
+                      {v.comprador.nombre} {v.comprador.apellido}
+                    </p>
+                  )}
+                  {v.mensaje && (
+                    <p className="mt-1 text-sm leading-relaxed text-tinta-suave">{v.mensaje}</p>
+                  )}
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
+                    COLOR_ESTADO[v.estado] ?? 'bg-tinta/5 text-tinta-suave'
+                  }`}
+                >
+                  {ETIQUETA_ESTADO_VISITA[v.estado] ?? v.estado}
+                </span>
+              </li>
+            ))}
+          </ul>
         </li>
       ))}
     </ul>

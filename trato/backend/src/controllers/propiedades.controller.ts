@@ -48,7 +48,9 @@ export const mias: RequestHandler = async (req, res, next) => {
 
 export const obtener: RequestHandler = async (req, res, next) => {
   try {
-    const propiedad = await servicio.obtenerPublica(req.params.id);
+    const propiedad = req.auth
+      ? await servicio.obtenerParaVisitante(req.params.id, req.auth.sub)
+      : await servicio.obtenerPublica(req.params.id);
     res.json({ propiedad });
   } catch (error) {
     next(error);

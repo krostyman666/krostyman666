@@ -32,6 +32,10 @@ export const crearPropiedadSchema = Joi.object({
 
   tieneHipoteca: Joi.boolean().default(false),
   fotos: Joi.array().items(Joi.string().uri()).max(30).default([]),
+
+  visitantesPorCupo: Joi.number().integer().min(1).max(10).default(1).messages({
+    'number.max': 'Más de 10 personas en un cupo no es una visita, es un evento',
+  }),
 });
 
 export const actualizarPropiedadSchema = crearPropiedadSchema.fork(
