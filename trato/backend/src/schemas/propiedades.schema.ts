@@ -38,10 +38,18 @@ export const crearPropiedadSchema = Joi.object({
   }),
 });
 
-export const actualizarPropiedadSchema = crearPropiedadSchema.fork(
-  Object.keys(crearPropiedadSchema.describe().keys),
-  (s) => s.optional(),
-);
+/**
+ * El PATCH sólo toca lo que viene en el cuerpo.
+ *
+ * `fork(..., optional)` por sí solo no basta: Joi conserva los `.default()` y
+ * los aplica a las claves ausentes, así que un PATCH de `{ precio }` llegaba al
+ * update con `fotos: []`, `estacionamientos: 0`, `bodegas: 0`,
+ * `tieneHipoteca: false`, `moneda: 'uf'` y `visitantesPorCupo: 1`. Editar el
+ * precio borraba las fotos de la publicación. `noDefaults` es lo que lo corta.
+ */
+export const actualizarPropiedadSchema = crearPropiedadSchema
+  .fork(Object.keys(crearPropiedadSchema.describe().keys), (s) => s.optional())
+  .prefs({ noDefaults: true });
 
 export const cambiarEstadoSchema = Joi.object({
   estado: Joi.string().valid(...ESTADOS_PROPIEDAD).required(),

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowRight, Circle, LogOut } from 'lucide-react';
 import { useSesion } from '@/hooks/useSesion';
 import MisPropiedades from '@/components/MisPropiedades';
+import MisPromesas from '@/components/MisPromesas';
 
 const ETAPAS_VENDEDOR = [
   'Publicar la propiedad con fotos y valor',
@@ -125,6 +126,8 @@ export default function PanelUsuario() {
           </div>
         </section>
       )}
+
+      <MisPromesas usuarioId={usuario.id} />
 
       <section className="mt-10">
         <h2 className="text-lg font-semibold text-tinta">Tu compraventa, paso a paso</h2>

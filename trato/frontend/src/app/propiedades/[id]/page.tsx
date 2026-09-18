@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import GaleriaFotos from '@/components/GaleriaFotos';
 import MapaPropiedad from '@/components/MapaPropiedad';
+import AbrirPromesa from '@/components/AbrirPromesa';
 import OfertaInforme from '@/components/OfertaInforme';
 import SolicitarVisita from '@/components/SolicitarVisita';
 import {
@@ -218,6 +219,11 @@ export default async function PropiedadPage({ params }: { params: Promise<{ id: 
           <aside className="space-y-5 lg:sticky lg:top-24 lg:self-start">
             <SolicitarVisita propiedadId={propiedad.id} comuna={propiedad.comuna} />
             <OfertaInforme propiedadId={propiedad.id} />
+            <AbrirPromesa
+              propiedadId={propiedad.id}
+              precio={propiedad.precio}
+              moneda={propiedad.moneda}
+            />
           </aside>
         </div>
       </main>

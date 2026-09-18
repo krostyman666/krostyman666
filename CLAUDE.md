@@ -32,7 +32,9 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Registro de actividades de tratamiento y plazos de conservación | Listo; la purga de lo vencido se informa, no se ejecuta sola |
 | Conexión a SII y Tesorería para avalúo y contribuciones | Pendiente |
 | Bot de preguntas del comprador | Pendiente |
-| Promesa, compraventa y firma | Pendiente |
+| Promesa: negociación de cláusulas entre las partes | Listo, probado en navegador |
+| Firma de la promesa (DocuSign) | Pendiente — falta contratar y poner credenciales |
+| Compraventa y escritura | Pendiente |
 | Subida de archivos de documentos | Pendiente |
 | Integraciones externas | Pendiente — ver doc de integraciones |
 
@@ -81,6 +83,14 @@ hay que pasar a migraciones antes del primer deploy.
 - **El filtro de precio se ancla a una moneda.** `precio` guarda el número sin
   la moneda, así que un rango suelto mezclaría UF con pesos. El arreglo de
   verdad es una columna normalizada; mientras no exista, el rango asume UF.
+- **Un PATCH parcial de propiedad borraba datos.** `actualizarPropiedadSchema`
+  se derivaba de `crearPropiedadSchema` con `fork(..., optional)`, pero Joi
+  conserva los `.default()` y los aplica a las claves ausentes: editar sólo el
+  precio llegaba al update con `fotos: []`, `estacionamientos: 0`, `bodegas: 0`,
+  `tieneHipoteca: false`, `moneda: 'uf'` y `visitantesPorCupo: 1`. Es decir,
+  cambiar el precio borraba las fotos de la publicación. Se arregla con
+  `.prefs({ noDefaults: true })` sobre el esquema de actualización. Cualquier
+  esquema de PATCH que se derive de uno de creación necesita lo mismo.
 - **El lint del frontend corría vacío**: `next lint` ya no existe en Next 16 y
   el `eslint.config.js` pasaba los configs de `eslint-config-next` por
   `FlatCompat`, que revienta. Ahora se extienden directo y `npm run lint` es
@@ -196,6 +206,41 @@ Los montos del catálogo son del Conservador de Santiago ($13.500 la carpeta de
 10 años) y cambian por territorio. El precio de venta es un placeholder en
 `PRECIO_INFORME_TITULOS_CLP`, como `UF_FALLBACK_CLP`: se congela en cada informe
 al pedirlo, así que cambiarlo no altera lo ya cobrado.
+
+## La promesa de compraventa
+
+`backend/src/dominio/promesa.ts`. El Código Civil parte diciendo que "la promesa
+de celebrar un contrato no produce obligación alguna", y sólo la salva si
+concurren las cuatro circunstancias del **artículo 1554**. Falta una y la
+promesa es **nula de nulidad absoluta**: el comprador que pagó un pie se queda
+sin contrato que exigir.
+
+Por eso los cuatro requisitos se verifican en código y **bloquean el paso a
+acordada**, en vez de quedar como advertencia que alguien lee o no. `acordar()`
+los vuelve a verificar aunque la UI ya los muestre: ese es el punto donde la
+promesa deja de ser borrador.
+
+Cómo funciona la negociación:
+
+- Las cláusulas obligatorias nacen con la promesa. El alzamiento sólo si la
+  propiedad tiene hipoteca declarada, porque prometer la venta de un inmueble
+  hipotecado sin decir cómo se alza choca con el 1554 Nº2.
+- **Quien propone un texto se entiende de acuerdo con él**, así que basta la
+  aceptación de la contraparte. Nadie puede aceptar su propia cláusula.
+- **Cambiar el texto anula la aceptación**, por hook del modelo y no del
+  servicio, igual que en `Documento`. Sin eso se podía acordar algo y
+  reescribirlo después.
+- **Una cláusula con marcadores sin llenar no se puede aceptar ni cuenta para
+  los requisitos.** Un texto que dice `{fojas}` no especifica nada, y el 1554
+  Nº4 exige justamente que el contrato prometido esté especificado. El guard
+  está en el servicio, no sólo en la UI.
+- Las obligatorias no se pueden quitar; las negociables sí.
+
+Los textos del catálogo son plantillas para negociar, no un contrato listo para
+firmar: la promesa acordada la revisa un abogado antes de la firma, y por eso
+`revisar()` rechaza una cuenta de abogado sin RUT vigente. Los plazos (60 días
+con fondos propios, 90 a 120 con crédito) y los porcentajes de multa (5% a 20%)
+son prácticas de mercado, no reglas legales.
 
 ## Cobro
 
@@ -398,6 +443,18 @@ GET   /api/v1/propiedades/:id/consentimiento          Bearer
 PUT   /api/v1/propiedades/:id/consentimiento          Bearer (solo el dueño)
 DELETE /api/v1/propiedades/:id/consentimiento         Bearer (solo el dueño)
 
+GET   /api/v1/promesas/catalogo              público: cláusulas y requisitos del 1554
+GET   /api/v1/promesas/mias                  Bearer
+POST  /api/v1/promesas/propiedad/:id         Bearer (comprador) { precio, pie?, fechaEscritura? }
+GET   /api/v1/promesas/:id                   Bearer (comprador o vendedor)
+PUT   /api/v1/promesas/:id/clausulas/:codigo Bearer { texto, comentario? }
+PATCH /api/v1/promesas/clausulas/:id/aceptar Bearer (la contraparte)
+DELETE /api/v1/promesas/clausulas/:id        Bearer (sólo las negociables)
+PATCH /api/v1/promesas/:id/acordar           Bearer → verifica el 1554
+PATCH /api/v1/promesas/:id/reabrir           Bearer
+PATCH /api/v1/promesas/:id/desistir          Bearer { motivo }
+PATCH /api/v1/promesas/:id/revision          Bearer, rol abogado
+
 GET   /api/v1/pagos/informe/:informeId       Bearer → medios, instrucciones y pagos del informe
 POST  /api/v1/pagos/informe/:informeId       Bearer { medio } → inicia el cobro
 PATCH /api/v1/pagos/:id/reportar             Bearer (comprador) → "ya transferí"
@@ -496,6 +553,12 @@ Para los medios de cobro:
 - Comparativa de pasarelas en Chile: https://www.rebill.com/blog/pasarelas-pago-chile
 - Medios de pago para ecommerce chileno: https://www.milaecommerce.com/medios-de-pago-ecommerce-chile
 - Cobertura de Stripe por país: https://stripe.com/global
+
+Para la promesa:
+
+- Artículo 1554 del Código Civil: https://leyes-cl.com/codigo_civil/1554.htm
+- El contrato de promesa (Juan Andrés Orrego): https://www.juanandresorrego.cl/assets/pdf/apu/ap_6/Contrato%20de%20Promesa.pdf
+- Promesa de compraventa de inmueble, requisitos: https://toroblancoabogados.cl/promesa-compraventa-inmueble-chile/
 
 ## Documentos de estrategia
 
