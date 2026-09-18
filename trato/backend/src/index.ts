@@ -10,6 +10,7 @@ import propiedadesRoutes from './routes/propiedades.routes';
 import notariasRoutes from './routes/notarias.routes';
 import visitasRoutes from './routes/visitas.routes';
 import informesRoutes from './routes/informes.routes';
+import economiaRoutes from './routes/economia.routes';
 import { manejarErrores, rutaNoEncontrada } from './middleware/manejarErrores';
 import './models/Usuario';
 import './models/Propiedad';
@@ -43,6 +44,7 @@ app.use('/api/v1/propiedades', propiedadesRoutes);
 app.use('/api/v1/notarias', notariasRoutes);
 app.use('/api/v1/visitas', visitasRoutes);
 app.use('/api/v1/informes', informesRoutes);
+app.use('/api/v1/economia', economiaRoutes);
 
 app.use(rutaNoEncontrada);
 app.use(manejarErrores);

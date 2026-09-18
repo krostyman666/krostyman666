@@ -25,7 +25,9 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Informe nivel gratis (antecedentes) | Listo, probado en navegador |
 | Informe nivel pagado: pedido, firma de abogado, entrega | Listo salvo el cobro |
 | Consentimiento del vendedor para divulgar antecedentes | Listo, probado en navegador |
+| Modelo de rentabilidad por venta cerrada (`/economia`, admin) | Listo, probado en navegador |
 | Cobro del informe pagado | Pendiente — hoy se pide y se cobra fuera de la plataforma |
+| Derechos del titular y plazos de conservación (Ley 21.719) | Pendiente — exigible desde el 1-dic-2026 |
 | Conexión a SII y Tesorería para avalúo y contribuciones | Pendiente |
 | Bot de preguntas del comprador | Pendiente |
 | Promesa, compraventa y firma | Pendiente |
@@ -193,6 +195,70 @@ Los montos del catálogo son del Conservador de Santiago ($13.500 la carpeta de
 `PRECIO_INFORME_TITULOS_CLP`, como `UF_FALLBACK_CLP`: se congela en cada informe
 al pedirlo, así que cambiarlo no altera lo ya cobrado.
 
+## Rentabilidad
+
+`backend/src/dominio/economia.ts` calcula qué deja una venta cerrada. El negocio
+cobra 1% donde el corredor cobra 2 a 5, y paga sueldos fijos donde el corredor
+paga comisión: esa apuesta sólo funciona si atender una propiedad cuesta poco y
+de forma predecible.
+
+**Todo se calcula por venta cerrada, no por publicación.** Una publicación que no
+vende igual consumió visitas y sueldo, así que con 25% de cierre cada venta paga
+las visitas de cuatro publicaciones. Dividir por publicación da un margen que no
+existe, y es el error que hunde a las corredoras que crecen.
+
+Lo que el modelo dejó a la vista con los supuestos por defecto:
+
+- A UF 8.400 el margen es cómodo, pero **bajo ~UF 1.500 la operación pierde
+  plata**: con 1% de comisión una propiedad barata no alcanza a pagar las visitas
+  que consumió. Ahí hay que cobrar distinto o no tomar la operación.
+- **El informe de títulos se vende bajo costo** con el placeholder actual: cuesta
+  ~$71.000 entre el tiempo del abogado y la carpeta del Conservador, y está
+  puesto en $49.000. El modelo sugiere ~$103.000.
+- **El cuello de botella son los asesores, no los abogados.** Un abogado alcanza
+  para el doble de ventas que un asesor, así que el próximo cargo a llenar es
+  asesor.
+- **El costo del equipo va a subir solo.** El aporte previsional de cargo del
+  empleador quedó en 3,5% desde agosto de 2026 y sube por gradualidad hasta 8,5%
+  en agosto de 2033 (Ley 21.735). Un modelo de sueldos fijos tiene que mirar esa
+  curva.
+
+Los sueldos y el costo empresa están investigados y llevan fuente en
+`FUENTES_SUPUESTOS`. Los del embudo —visitas por publicación, tasa de cierre,
+informes vendidos— **no tienen fuente pública en Chile**: están en `SIN_FUENTE`,
+se marcan en la UI y son los que más mueven el resultado. Hasta que haya datos
+propios, el modelo dice "si pasa esto, gano esto", no "gano esto".
+
+## Cumplimiento: qué está cubierto y qué falta
+
+Las multas en juego son altas —hasta 20.000 UTM o 4% de los ingresos en la Ley
+21.719, y hasta 1.500 UTM por publicidad engañosa— así que conviene saber dónde
+estamos parados.
+
+Cubierto:
+
+- Base de licitud para divulgar antecedentes del vendedor: consentimiento
+  expreso, con versión del texto, fecha e IP, y revocable.
+- Límites del informe gratis a la vista, no en letra chica.
+- El expediente y los antecedentes de inscripción fuera de los endpoints
+  públicos.
+- El nombre del producto sigue a la firma del abogado, no al revés.
+
+Falta, en orden de riesgo:
+
+- **Derechos del titular (acceso, rectificación, cancelación, oposición y
+  portabilidad).** Hoy no hay forma de que un usuario pida sus datos ni que se
+  los borren. Es exigible desde el 1 de diciembre de 2026.
+- **Plazos de conservación.** Los informes guardan datos personales para siempre
+  por diseño, porque son evidencia de qué se entregó. Hay que definir cuánto se
+  conservan y qué se anonimiza al vencer ese plazo.
+- **Registro de actividades de tratamiento.** Qué datos tratamos, con qué
+  finalidad, con qué base y por cuánto tiempo.
+- **Notificación de brechas en 72 horas.** Necesita detección y un procedimiento,
+  no sólo intención.
+- **Confirmar el catálogo con abogado.** Plazos de vigencia, obligatoriedad de
+  cada documento y los textos de consentimiento.
+
 ## Visitas
 
 El vendedor declara ventanas semanales (`disponibilidad_visitas`, hora de pared
@@ -265,6 +331,8 @@ GET   /api/v1/propiedades/:id/consentimiento          Bearer
 PUT   /api/v1/propiedades/:id/consentimiento          Bearer (solo el dueño)
 DELETE /api/v1/propiedades/:id/consentimiento         Bearer (solo el dueño)
 
+POST  /api/v1/economia/modelo                Bearer, rol admin  { precioVentaUf, asesores, abogados, supuestos }
+
 GET   /api/v1/informes/catalogo              público: qué trae cada nivel, precio y plazo
 GET   /api/v1/informes/mios                  Bearer
 GET   /api/v1/informes/:id                   Bearer (solo el comprador)
@@ -332,6 +400,15 @@ antes de producción, y revisar la 21.719 después del 1 de diciembre de 2026.
 - Certificado de avalúo fiscal (SII): https://www.sii.cl/servicios_online/1048-.html
 - Informe de no expropiación: https://www.chileatiende.gob.cl/fichas/30291-informe-de-no-expropiacion
 - Reglamento de la Ley 21.442, copropiedad: https://www.minvu.gob.cl/wp-content/uploads/2025/01/Reglamento-de-la-ley-21442.pdf
+
+Para el modelo de costos:
+
+- Cotización de cargo del empleador (Superintendencia de Pensiones): https://www.spensiones.cl/portal/institucional/594/w3-propertyvalue-10906.html
+- Nota técnica de la reforma de pensiones, Ley 21.735: https://previsionsocial.gob.cl/wp-content/uploads/2025/08/Nota-Tecnica-Reforma-de-Pensiones-Ley-N%C2%B021.735.pdf
+- Aportes del empleador al sistema de pensiones: https://www.chileatiende.gob.cl/fichas/130987-aportes-del-empleador-al-sistema-de-pensiones
+- Sueldos de asesor inmobiliario: https://cl.computrabajo.com/salarios/asesor-inmobiliario
+- Sueldos de abogado: https://cl.indeed.com/career/abogado/salaries
+- Inscripción de una propiedad en el Conservador: https://www.chileatiende.gob.cl/fichas/12116-inscripcion-de-una-propiedad
 
 ## Documentos de estrategia
 
