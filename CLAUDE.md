@@ -27,7 +27,8 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Consentimiento del vendedor para divulgar antecedentes | Listo, probado en navegador |
 | Modelo de rentabilidad por venta cerrada (`/economia`, admin) | Listo, probado en navegador |
 | Cobro del informe pagado | Pendiente — hoy se pide y se cobra fuera de la plataforma |
-| Derechos del titular y plazos de conservación (Ley 21.719) | Pendiente — exigible desde el 1-dic-2026 |
+| Derechos del titular: acceso, rectificación, supresión, oposición, portabilidad | Listo, probado en navegador |
+| Registro de actividades de tratamiento y plazos de conservación | Listo; la purga de lo vencido se informa, no se ejecuta sola |
 | Conexión a SII y Tesorería para avalúo y contribuciones | Pendiente |
 | Bot de preguntas del comprador | Pendiente |
 | Promesa, compraventa y firma | Pendiente |
@@ -243,21 +244,51 @@ Cubierto:
 - El expediente y los antecedentes de inscripción fuera de los endpoints
   públicos.
 - El nombre del producto sigue a la firma del abogado, no al revés.
+- Los cinco derechos del titular, en `/mis-datos`. Ver la sección siguiente.
+- Registro de actividades de tratamiento, con finalidad, base y plazo por
+  categoría.
 
 Falta, en orden de riesgo:
 
-- **Derechos del titular (acceso, rectificación, cancelación, oposición y
-  portabilidad).** Hoy no hay forma de que un usuario pida sus datos ni que se
-  los borren. Es exigible desde el 1 de diciembre de 2026.
-- **Plazos de conservación.** Los informes guardan datos personales para siempre
-  por diseño, porque son evidencia de qué se entregó. Hay que definir cuánto se
-  conservan y qué se anonimiza al vencer ese plazo.
-- **Registro de actividades de tratamiento.** Qué datos tratamos, con qué
-  finalidad, con qué base y por cuánto tiempo.
 - **Notificación de brechas en 72 horas.** Necesita detección y un procedimiento,
   no sólo intención.
+- **Ejecutar la purga de lo vencido.** `datosVencidos()` informa qué pasó su
+  plazo; borrarlo o anonimizarlo es todavía una decisión manual.
 - **Confirmar el catálogo con abogado.** Plazos de vigencia, obligatoriedad de
-  cada documento y los textos de consentimiento.
+  cada documento, los plazos de conservación y los textos de consentimiento.
+
+## Datos personales y derechos del titular
+
+`backend/src/dominio/datos-personales.ts` es el registro de actividades de
+tratamiento: qué datos tratamos, para qué, con qué base de licitud y por cuánto
+tiempo. Está en código y no en un documento aparte porque de ahí salen dos cosas
+que el sistema ejecuta: qué se puede suprimir cuando el titular lo pide, y qué
+se anonimiza al vencer su plazo.
+
+Las decisiones que conviene entender antes de tocarlo:
+
+- **Se anonimiza la persona, se conserva la operación.** Borrar la fila del
+  usuario arrastraría visitas, informes y expedientes que otra norma obliga a
+  conservar. En su lugar el nombre, correo, RUT y teléfono se reemplazan por un
+  marcador y la cuenta queda sin poder entrar. Por eso `Usuario.rut` es
+  nullable: nulo significa suprimido.
+- **Se anuncia sólo lo que existe.** La evaluación de supresión cuenta lo que el
+  titular realmente tiene antes de decirle qué se retiene. Avisarle que
+  guardamos autorizaciones que nunca dio es una respuesta falsa.
+- **La supresión se bloquea con una operación en curso**, no con una cerrada.
+  Sin RUT no se puede escriturar; una vez cerrada, la persona se anonimiza y la
+  documentación queda.
+- **Las solicitudes sobreviven al usuario.** `solicitudes_datos` es la evidencia
+  de haber atendido cada derecho. Borrarla junto con la cuenta destruiría la
+  prueba de que se atendió la petición.
+- **Un abogado anonimizado no puede firmar.** La pauta del Colegio de Abogados
+  exige sus datos en el informe, así que `firmarTitulos` rechaza una cuenta sin
+  RUT vigente.
+- **El registro es público, ejercer los derechos no.** `/mis-datos` se lee sin
+  sesión para que alguien pueda decidir antes de registrarse.
+
+Los plazos de conservación hay que confirmarlos con abogado. El de 6 años viene
+de la prescripción tributaria extendida; los demás son criterios comerciales.
 
 ## Visitas
 
@@ -330,6 +361,13 @@ POST  /api/v1/propiedades/:id/informes/titulos        Bearer  → pedido, estado
 GET   /api/v1/propiedades/:id/consentimiento          Bearer
 PUT   /api/v1/propiedades/:id/consentimiento          Bearer (solo el dueño)
 DELETE /api/v1/propiedades/:id/consentimiento         Bearer (solo el dueño)
+
+GET   /api/v1/mis-datos/registro             público: qué tratamos, para qué y por cuánto
+GET   /api/v1/mis-datos/exportar             Bearer → JSON completo (acceso y portabilidad)
+PATCH /api/v1/mis-datos                      Bearer { nombre?, apellido?, telefono?, email? }
+GET   /api/v1/mis-datos/supresion            Bearer → qué se borraría y qué se retiene
+DELETE /api/v1/mis-datos                     Bearer → anonimiza la cuenta
+GET   /api/v1/mis-datos/vencidos             Bearer, rol admin
 
 POST  /api/v1/economia/modelo                Bearer, rol admin  { precioVentaUf, asesores, abogados, supuestos }
 

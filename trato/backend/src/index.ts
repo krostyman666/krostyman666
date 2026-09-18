@@ -11,6 +11,7 @@ import notariasRoutes from './routes/notarias.routes';
 import visitasRoutes from './routes/visitas.routes';
 import informesRoutes from './routes/informes.routes';
 import economiaRoutes from './routes/economia.routes';
+import datosPersonalesRoutes from './routes/datos-personales.routes';
 import { manejarErrores, rutaNoEncontrada } from './middleware/manejarErrores';
 import './models/Usuario';
 import './models/Propiedad';
@@ -20,6 +21,7 @@ import './models/DisponibilidadVisita';
 import './models/Visita';
 import './models/Consentimiento';
 import './models/Informe';
+import './models/SolicitudDatos';
 
 const app = express();
 
@@ -45,6 +47,7 @@ app.use('/api/v1/notarias', notariasRoutes);
 app.use('/api/v1/visitas', visitasRoutes);
 app.use('/api/v1/informes', informesRoutes);
 app.use('/api/v1/economia', economiaRoutes);
+app.use('/api/v1/mis-datos', datosPersonalesRoutes);
 
 app.use(rutaNoEncontrada);
 app.use(manejarErrores);

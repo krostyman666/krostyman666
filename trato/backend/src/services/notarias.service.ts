@@ -53,7 +53,8 @@ export interface CasoBandeja {
     comuna: string;
     estado: string;
   };
-  vendedor: { id: string; nombre: string; apellido: string; rut: string } | null;
+  // El RUT queda nulo si el vendedor ejerció su derecho de supresión.
+  vendedor: { id: string; nombre: string; apellido: string; rut: string | null } | null;
   totalDocumentos: number;
   porRevisar: number;
   observados: number;

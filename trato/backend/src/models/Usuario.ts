@@ -34,9 +34,15 @@ export class Usuario extends Model<
   declare passwordHash: string;
   declare nombre: string;
   declare apellido: string;
-  declare rut: string;
+  /**
+   * Queda en null cuando el titular ejerce su derecho de supresión. No es
+   * opcional al registrarse: el esquema de registro lo exige.
+   */
+  declare rut: string | null;
   declare telefono: string | null;
   declare rol: CreationOptional<Rol>;
+  /** Fecha en que se anonimizó por petición del titular. */
+  declare anonimizadoEn: CreationOptional<Date | null>;
   /** Solo para usuarios con rol notaria: a qué oficina pertenecen. */
   declare socioId: CreationOptional<string | null>;
   declare emailVerificado: CreationOptional<boolean>;
@@ -90,14 +96,16 @@ Usuario.init(
     },
     rut: {
       type: DataTypes.STRING(12),
-      allowNull: false,
+      // Nulo sólo por supresión del titular. En Postgres el índice único
+      // admite varios nulos, así que no choca entre cuentas anonimizadas.
+      allowNull: true,
       unique: true,
-      set(valor: string) {
-        this.setDataValue('rut', limpiarRut(valor));
+      set(valor: string | null) {
+        this.setDataValue('rut', valor === null ? null : limpiarRut(valor));
       },
       validate: {
-        rutChileno(valor: string) {
-          if (!esRutValido(valor)) {
+        rutChileno(valor: string | null) {
+          if (valor !== null && !esRutValido(valor)) {
             throw new Error('El RUT no es válido');
           }
         },
@@ -113,6 +121,7 @@ Usuario.init(
       defaultValue: 'comprador',
     },
     socioId: { type: DataTypes.UUID, allowNull: true },
+    anonimizadoEn: { type: DataTypes.DATE, allowNull: true },
     emailVerificado: {
       type: DataTypes.BOOLEAN,
       allowNull: false,

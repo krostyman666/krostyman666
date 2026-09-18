@@ -57,14 +57,38 @@ export default function PanelUsuario() {
             Cuenta de {usuario.rol} · {usuario.email}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={salir}
-          className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-tinta-suave transition hover:bg-tinta/5 hover:text-tinta"
-        >
-          <LogOut className="h-4 w-4" />
-          Salir
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {usuario.rol === 'asesor' && (
+            <Link
+              href="/agenda"
+              className="rounded-lg px-3 py-2 text-sm font-medium text-tinta-suave transition hover:bg-tinta/5 hover:text-tinta"
+            >
+              Mi agenda
+            </Link>
+          )}
+          {usuario.rol === 'admin' && (
+            <Link
+              href="/economia"
+              className="rounded-lg px-3 py-2 text-sm font-medium text-tinta-suave transition hover:bg-tinta/5 hover:text-tinta"
+            >
+              Modelo económico
+            </Link>
+          )}
+          <Link
+            href="/mis-datos"
+            className="rounded-lg px-3 py-2 text-sm font-medium text-tinta-suave transition hover:bg-tinta/5 hover:text-tinta"
+          >
+            Mis datos
+          </Link>
+          <button
+            type="button"
+            onClick={salir}
+            className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-tinta-suave transition hover:bg-tinta/5 hover:text-tinta"
+          >
+            <LogOut className="h-4 w-4" />
+            Salir
+          </button>
+        </div>
       </div>
 
       <div className="mt-8 rounded-2xl bg-trato-600 p-6 text-white shadow-carta sm:p-8">

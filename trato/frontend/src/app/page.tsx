@@ -323,10 +323,18 @@ export default function Home() {
               Compraventa de propiedades de trato directo, en Chile.
             </p>
           </div>
-          <p className="text-xs text-tinta-tenue">
-            © {new Date().getFullYear()} Trato. Los valores mostrados son estimaciones y no
-            constituyen asesoría legal ni tributaria.
-          </p>
+          <div className="sm:text-right">
+            <Link
+              href="/mis-datos"
+              className="text-sm font-medium text-tinta-suave hover:text-tinta"
+            >
+              Qué datos guardamos
+            </Link>
+            <p className="mt-2 text-xs text-tinta-tenue">
+              © {new Date().getFullYear()} Trato. Los valores mostrados son estimaciones y no
+              constituyen asesoría legal ni tributaria.
+            </p>
+          </div>
         </div>
       </footer>
     </>

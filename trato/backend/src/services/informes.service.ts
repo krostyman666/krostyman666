@@ -353,6 +353,11 @@ export async function firmarTitulos(
   if (!abogado || (abogado.rol !== 'abogado' && abogado.rol !== 'admin')) {
     throw ErrorApi.prohibido('Sólo un abogado puede firmar un estudio de títulos');
   }
+  // La pauta del Colegio de Abogados exige los datos del abogado en el informe.
+  // Una cuenta anonimizada no los tiene, así que no puede responder por nada.
+  if (abogado.rut === null) {
+    throw ErrorApi.conflicto('La cuenta del abogado no tiene RUT vigente para firmar');
+  }
 
   return informe.update({
     abogadoId,
