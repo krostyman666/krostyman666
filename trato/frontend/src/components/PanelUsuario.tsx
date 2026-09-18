@@ -67,12 +67,20 @@ export default function PanelUsuario() {
             </Link>
           )}
           {usuario.rol === 'admin' && (
-            <Link
-              href="/economia"
-              className="rounded-lg px-3 py-2 text-sm font-medium text-tinta-suave transition hover:bg-tinta/5 hover:text-tinta"
-            >
-              Modelo económico
-            </Link>
+            <>
+              <Link
+                href="/pagos"
+                className="rounded-lg px-3 py-2 text-sm font-medium text-tinta-suave transition hover:bg-tinta/5 hover:text-tinta"
+              >
+                Conciliar pagos
+              </Link>
+              <Link
+                href="/economia"
+                className="rounded-lg px-3 py-2 text-sm font-medium text-tinta-suave transition hover:bg-tinta/5 hover:text-tinta"
+              >
+                Modelo económico
+              </Link>
+            </>
           )}
           <Link
             href="/mis-datos"

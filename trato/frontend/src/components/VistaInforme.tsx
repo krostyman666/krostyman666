@@ -1,14 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, Clock, FileSignature, Info, Landmark } from 'lucide-react';
 import { api, mensajeDeError } from '@/lib/api';
 import { formatearRut } from '@/lib/rut';
+import PagoInforme from './PagoInforme';
 import {
   ETIQUETA_ESTADO_INFORME,
   ETIQUETA_FUENTE,
-  formatearPesos,
   type InformeApi,
   type SeccionInforme,
 } from '@/lib/informes';
@@ -142,12 +142,16 @@ export default function VistaInforme({ informeId }: { informeId: string }) {
   const [informe, setInforme] = useState<InformeApi | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const cargar = useCallback(() => {
     api
       .get<{ informe: InformeApi }>(`/informes/${informeId}`)
       .then(({ data }) => setInforme(data.informe))
       .catch((e) => setError(mensajeDeError(e)));
   }, [informeId]);
+
+  useEffect(() => {
+    cargar();
+  }, [cargar]);
 
   if (error) return <p className="text-sm text-red-600">{error}</p>;
   if (!informe) return <p className="text-sm text-tinta-tenue">Cargando el informe...</p>;
@@ -228,14 +232,15 @@ export default function VistaInforme({ informeId }: { informeId: string }) {
       )}
 
       {esperandoPago && (
-        <section className="mt-8 rounded-2xl border border-trato-200 bg-trato-50/60 p-6">
-          <Clock className="h-6 w-6 text-trato-700" strokeWidth={1.75} />
-          <h2 className="mt-3 font-semibold text-tinta">Esperando el pago</h2>
-          <p className="mt-1.5 text-sm leading-relaxed text-tinta-suave">
-            Son {formatearPesos(informe.precioClp)}. Te enviamos el link de pago. Cuando esté
-            pagado pedimos los certificados al Conservador, que tarda{' '}
+        <section className="mt-8">
+          <p className="flex gap-2 text-sm leading-relaxed text-tinta-suave">
+            <Clock className="mt-0.5 h-4 w-4 shrink-0 text-tinta-tenue" />
+            Una vez pagado pedimos los certificados al Conservador, que tarda{' '}
             {contenido.plazoHabiles?.minimo} a {contenido.plazoHabiles?.maximo} días hábiles.
           </p>
+          <div className="mt-4">
+            <PagoInforme informeId={informe.id} onPagado={cargar} />
+          </div>
         </section>
       )}
 

@@ -29,6 +29,24 @@ export const env = {
    * cobrado.
    */
   precioInformeTitulosClp: Number(process.env.PRECIO_INFORME_TITULOS_CLP ?? 49_000),
+
+  /**
+   * Cuenta a la que el comprador transfiere. Sin ella no se ofrece el medio:
+   * mostrar instrucciones vacías es peor que no ofrecerlo.
+   */
+  cuentaCobro: {
+    banco: process.env.COBRO_BANCO ?? '',
+    tipoCuenta: process.env.COBRO_TIPO_CUENTA ?? '',
+    numero: process.env.COBRO_NUMERO_CUENTA ?? '',
+    titular: process.env.COBRO_TITULAR ?? '',
+    rut: process.env.COBRO_RUT ?? '',
+    email: process.env.COBRO_EMAIL ?? '',
+  },
 } as const;
+
+export function cuentaDeCobroConfigurada(): boolean {
+  const c = env.cuentaCobro;
+  return Boolean(c.banco && c.numero && c.titular && c.rut);
+}
 
 export const esProduccion = env.nodeEnv === 'production';

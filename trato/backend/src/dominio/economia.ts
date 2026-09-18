@@ -54,6 +54,11 @@ export interface Supuestos {
   // --- Insumos ---
   /** Carpeta de títulos del Conservador. */
   costoCarpetaCbr: number;
+  /**
+   * Comisión de la pasarela sobre lo cobrado, con su IVA incluido: ese IVA es
+   * costo y no se recupera. Por defecto la transferencia (0,99% + IVA).
+   */
+  comisionPasarela: number;
 }
 
 /** Los supuestos que no tienen fuente pública y hay que reemplazar con datos propios. */
@@ -74,6 +79,8 @@ export const FUENTES_SUPUESTOS: Record<string, string> = {
   factorCostoEmpresa:
     'Cotizaciones de cargo del empleador ~7 a 9% desde agosto 2026 (previsional 3,5% Ley 21.735, cesantía 2,4%, mutual 0,9-3,4%, SANNA 0,03%) más provisiones de gratificación y feriado. El costo empresa total queda entre 20% y 35% sobre el bruto.',
   costoCarpetaCbr: 'Carpeta de estudio de títulos 10 años, Conservador de Santiago: $13.500.',
+  comisionPasarela:
+    'Transferencia por Flow: 0,99% + IVA. Con tarjeta sube a 2,95% + IVA. Stripe queda fuera: no admite registro de empresas chilenas.',
   tasaComision: 'Definición del producto: 1% + IVA.',
   precioInformeTitulos: 'Placeholder comercial, sin decidir.',
 };
@@ -106,6 +113,7 @@ export const SUPUESTOS_POR_DEFECTO: Supuestos = {
   informesPorPublicacion: 1.5,
 
   costoCarpetaCbr: 13_500,
+  comisionPasarela: 0.0118,
 };
 
 export interface DesgloseOperacion {
@@ -123,6 +131,7 @@ export interface DesgloseOperacion {
   costoVisitas: number;
   costoEstudios: number;
   costoInsumos: number;
+  costoPasarela: number;
   costoTotal: number;
 
   margen: number;
@@ -165,9 +174,12 @@ export function margenDeOperacion(
   const costoVisitas = publicacionesPorVenta * s.visitasPorPublicacion * porVisita;
   const costoEstudios = informesVendidos * porEstudio;
   const costoInsumos = informesVendidos * s.costoCarpetaCbr;
+  // La comisión sólo se paga sobre lo que se cobra por la plataforma. La
+  // comisión de corretaje se factura aparte, fuera de la pasarela.
+  const costoPasarela = ingresoInformes * s.comisionPasarela;
 
   const ingresoTotal = ingresoComision + ingresoInformes;
-  const costoTotal = costoVisitas + costoEstudios + costoInsumos;
+  const costoTotal = costoVisitas + costoEstudios + costoInsumos + costoPasarela;
   const margen = ingresoTotal - costoTotal;
 
   // Precio bajo el cual no conviene tomar la operación: el que deja la comisión
@@ -186,6 +198,7 @@ export function margenDeOperacion(
     costoVisitas,
     costoEstudios,
     costoInsumos,
+    costoPasarela,
     costoTotal,
     margen,
     margenPorcentaje: ingresoTotal > 0 ? margen / ingresoTotal : 0,
@@ -203,7 +216,14 @@ export function precioInformeQueCubreCosto(
   margenObjetivo = 0.3,
 ): { costo: number; sugerido: number } {
   const costo = costoPorEstudio(supuestos) + supuestos.costoCarpetaCbr;
-  return { costo, sugerido: Math.ceil((costo / (1 - margenObjetivo)) / 1000) * 1000 };
+
+  // La comisión de la pasarela es un porcentaje del propio precio, así que
+  // sumarla al costo sería circular. Despejando:
+  //   precio · (1 − margen − comisión) = costoFijo
+  const divisor = 1 - margenObjetivo - supuestos.comisionPasarela;
+  if (divisor <= 0) return { costo, sugerido: 0 };
+
+  return { costo, sugerido: Math.ceil(costo / divisor / 1000) * 1000 };
 }
 
 /**

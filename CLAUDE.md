@@ -26,7 +26,8 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Informe nivel pagado: pedido, firma de abogado, entrega | Listo salvo el cobro |
 | Consentimiento del vendedor para divulgar antecedentes | Listo, probado en navegador |
 | Modelo de rentabilidad por venta cerrada (`/economia`, admin) | Listo, probado en navegador |
-| Cobro del informe pagado | Pendiente — hoy se pide y se cobra fuera de la plataforma |
+| Cobro del informe por transferencia, con conciliación manual | Listo, probado en navegador |
+| Cobro con tarjeta (Flow) | Pendiente — falta contratar y poner credenciales |
 | Derechos del titular: acceso, rectificación, supresión, oposición, portabilidad | Listo, probado en navegador |
 | Registro de actividades de tratamiento y plazos de conservación | Listo; la purga de lo vencido se informa, no se ejecuta sola |
 | Conexión a SII y Tesorería para avalúo y contribuciones | Pendiente |
@@ -196,6 +197,41 @@ Los montos del catálogo son del Conservador de Santiago ($13.500 la carpeta de
 `PRECIO_INFORME_TITULOS_CLP`, como `UF_FALLBACK_CLP`: se congela en cada informe
 al pedirlo, así que cambiarlo no altera lo ya cobrado.
 
+## Cobro
+
+`backend/src/dominio/pagos.ts` define los medios. Dos decisiones con fundamento
+que conviene no revertir sin cotizar de nuevo:
+
+- **Stripe queda fuera**, pese a las llaves que había reservadas en
+  `.env.example`. Sólo admite registro de empresas en 46 países y Chile no está
+  entre ellos —en Sudamérica sólo Brasil—, así que una sociedad chilena no puede
+  onboardearse directo. Además cobra 3,6% + $30, la comisión más alta del
+  mercado local.
+- **El destino es Flow.** Es agregador: una integración da Webpay, transferencia
+  y Servipag sin que nosotros pasemos por la certificación de Transbank, y deja
+  la transferencia en 0,99% + IVA. En un cobro de $100.000 eso es la diferencia
+  entre pagar $1.200 y pagar $4.200.
+
+Mientras no haya credenciales se cobra por transferencia con conciliación
+manual, que es como opera buena parte del comercio chico en Chile. El flujo está
+completo y el proveedor entra sin rehacerlo.
+
+Tres cosas del diseño:
+
+- **El monto se congela en el `Pago`.** Lo cobrado es un hecho fechado y cambiar
+  el precio de lista no puede reescribir lo que alguien ya pagó.
+- **La `referencia` es lo que hace calzable la transferencia.** Va sin I, O, 0 ni
+  1 porque el comprador la copia a mano al mensaje del abono y esos cuatro se
+  confunden. Sin ella hay que adivinar de quién es cada depósito.
+- **Conciliar mueve el informe en la misma transacción.** Cobrar y no avanzar el
+  informe deja al comprador pagando por nada, así que van juntos o no van.
+- **Un solo cobro abierto por informe.** Dos referencias vivas para la misma
+  deuda es la receta para cobrar dos veces o conciliar la equivocada.
+
+El comprador avisa que transfirió, pero eso no confirma nada: lo calza una
+persona en `/pagos`. La comisión de la pasarela entra en el modelo de
+rentabilidad, porque su IVA es costo y no se recupera.
+
 ## Rentabilidad
 
 `backend/src/dominio/economia.ts` calcula qué deja una venta cerrada. El negocio
@@ -362,6 +398,13 @@ GET   /api/v1/propiedades/:id/consentimiento          Bearer
 PUT   /api/v1/propiedades/:id/consentimiento          Bearer (solo el dueño)
 DELETE /api/v1/propiedades/:id/consentimiento         Bearer (solo el dueño)
 
+GET   /api/v1/pagos/informe/:informeId       Bearer → medios, instrucciones y pagos del informe
+POST  /api/v1/pagos/informe/:informeId       Bearer { medio } → inicia el cobro
+PATCH /api/v1/pagos/:id/reportar             Bearer (comprador) → "ya transferí"
+GET   /api/v1/pagos/por-conciliar            Bearer, rol admin
+PATCH /api/v1/pagos/:id/conciliar            Bearer, rol admin → pago pagado + informe en preparación
+PATCH /api/v1/pagos/:id/anular               Bearer, rol admin { motivo }
+
 GET   /api/v1/mis-datos/registro             público: qué tratamos, para qué y por cuánto
 GET   /api/v1/mis-datos/exportar             Bearer → JSON completo (acceso y portabilidad)
 PATCH /api/v1/mis-datos                      Bearer { nombre?, apellido?, telefono?, email? }
@@ -447,6 +490,12 @@ Para el modelo de costos:
 - Sueldos de asesor inmobiliario: https://cl.computrabajo.com/salarios/asesor-inmobiliario
 - Sueldos de abogado: https://cl.indeed.com/career/abogado/salaries
 - Inscripción de una propiedad en el Conservador: https://www.chileatiende.gob.cl/fichas/12116-inscripcion-de-una-propiedad
+
+Para los medios de cobro:
+
+- Comparativa de pasarelas en Chile: https://www.rebill.com/blog/pasarelas-pago-chile
+- Medios de pago para ecommerce chileno: https://www.milaecommerce.com/medios-de-pago-ecommerce-chile
+- Cobertura de Stripe por país: https://stripe.com/global
 
 ## Documentos de estrategia
 

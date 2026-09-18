@@ -18,6 +18,7 @@ interface Supuestos {
   tasaDeCierre: number;
   informesPorPublicacion: number;
   costoCarpetaCbr: number;
+  comisionPasarela: number;
 }
 
 interface Respuesta {
@@ -37,6 +38,7 @@ interface Respuesta {
     costoVisitas: number;
     costoEstudios: number;
     costoInsumos: number;
+    costoPasarela: number;
     costoTotal: number;
     margen: number;
     margenPorcentaje: number;
@@ -72,6 +74,7 @@ const CAMPOS: { clave: keyof Supuestos; etiqueta: string; paso?: number; sufijo?
   { clave: 'informesPorPublicacion', etiqueta: 'Informes vendidos por publicación', paso: 0.5 },
   { clave: 'precioInformeTitulos', etiqueta: 'Precio del informe', paso: 1_000 },
   { clave: 'costoCarpetaCbr', etiqueta: 'Carpeta del Conservador', paso: 500 },
+  { clave: 'comisionPasarela', etiqueta: 'Comisión de la pasarela', paso: 0.001 },
   { clave: 'ufEnPesos', etiqueta: 'UF en pesos', paso: 100 },
 ];
 
@@ -266,6 +269,12 @@ export default function ModeloEconomico() {
             <Fila
               etiqueta="Carpetas del Conservador"
               monto={o.costoInsumos}
+              total={o.costoTotal}
+              tono="bg-tinta/40"
+            />
+            <Fila
+              etiqueta="Comisión de la pasarela"
+              monto={o.costoPasarela}
               total={o.costoTotal}
               tono="bg-tinta/40"
             />

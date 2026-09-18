@@ -24,6 +24,7 @@ const modeloSchema = Joi.object({
     tasaDeCierre: fraccion.invalid(0),
     informesPorPublicacion: Joi.number().min(0),
     costoCarpetaCbr: Joi.number().min(0),
+    comisionPasarela: fraccion,
   }),
 });
 
