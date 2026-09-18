@@ -20,6 +20,15 @@ export const env = {
   databaseUrl: requerido('DATABASE_URL'),
   jwtSecret: requerido('JWT_SECRET'),
   jwtExpira: process.env.JWT_EXPIRE ?? '7d',
+
+  /**
+   * Precio del informe de títulos. Placeholder, como `UF_FALLBACK_CLP`: el
+   * costo de insumos conocido son los $13.500 de la carpeta del Conservador de
+   * Santiago, y el resto del margen es decisión comercial sin tomar. Se guarda
+   * en cada informe al momento de pedirlo, así que cambiarlo no altera lo ya
+   * cobrado.
+   */
+  precioInformeTitulosClp: Number(process.env.PRECIO_INFORME_TITULOS_CLP ?? 49_000),
 } as const;
 
 export const esProduccion = env.nodeEnv === 'production';

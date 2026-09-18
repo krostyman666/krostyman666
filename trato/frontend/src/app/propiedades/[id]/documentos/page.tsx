@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Cabecera from '@/components/Cabecera';
+import ConsentimientoDivulgacion from '@/components/ConsentimientoDivulgacion';
 import InformeDocumentos from '@/components/InformeDocumentos';
 
 export const metadata: Metadata = {
@@ -19,6 +20,10 @@ export default async function DocumentosPage({ params }: { params: Promise<{ id:
           Todos los papeles que necesita esta compraventa, en el orden en que se piden. Los que dicen
           Trato los gestionamos nosotros.
         </p>
+
+        <div className="mt-8">
+          <ConsentimientoDivulgacion propiedadId={id} />
+        </div>
 
         <div className="mt-8">
           <InformeDocumentos propiedadId={id} />

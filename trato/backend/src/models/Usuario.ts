@@ -12,7 +12,17 @@ import { esRutValido, limpiarRut } from '../utils/rut';
 
 const COSTO_BCRYPT = 12;
 
-export const ROLES = ['vendedor', 'comprador', 'asesor', 'notaria', 'admin'] as const;
+// 'abogado' existe porque un estudio de títulos sólo es tal si lo firma un
+// abogado titulado, que responde por su conclusión. Sin ese rol no hay forma de
+// distinguir una firma válida de cualquier usuario apretando el botón.
+export const ROLES = [
+  'vendedor',
+  'comprador',
+  'asesor',
+  'notaria',
+  'abogado',
+  'admin',
+] as const;
 export type Rol = (typeof ROLES)[number];
 
 export class Usuario extends Model<

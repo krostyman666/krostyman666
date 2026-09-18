@@ -22,8 +22,12 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Visita individual u open house, a elección del vendedor | Listo, probado en navegador |
 | Agenda del asesor y asignación por comuna | Listo, probado en navegador |
 | Notaría como actor: bandeja y validación | Listo, probado en navegador |
-| Bot de preguntas del comprador | Pendiente — decisión de alcance abierta |
-| Informe pagado del inmueble | Pendiente — decisión de fuentes y SLA abierta |
+| Informe nivel gratis (antecedentes) | Listo, probado en navegador |
+| Informe nivel pagado: pedido, firma de abogado, entrega | Listo salvo el cobro |
+| Consentimiento del vendedor para divulgar antecedentes | Listo, probado en navegador |
+| Cobro del informe pagado | Pendiente — hoy se pide y se cobra fuera de la plataforma |
+| Conexión a SII y Tesorería para avalúo y contribuciones | Pendiente |
+| Bot de preguntas del comprador | Pendiente |
 | Promesa, compraventa y firma | Pendiente |
 | Subida de archivos de documentos | Pendiente |
 | Integraciones externas | Pendiente — ver doc de integraciones |
@@ -140,6 +144,55 @@ sector y sólo marca el punto con `exacta`, que se usa una vez confirmada la
 visita: si el número va en la página pública, cualquiera llega al vendedor por
 fuera y la plataforma no cobra por lo que hizo.
 
+## El informe en dos niveles
+
+`backend/src/dominio/informe.catalogo.ts` define qué trae cada nivel. Los dos
+niveles no son una táctica comercial: salen de que las fuentes se comportan
+distinto. El avalúo del SII sale gratis y al instante con el rol; los
+certificados del Conservador hay que comprarlos y esperarlos, porque son cerca
+de 300 oficinas independientes por territorio y casi ninguna publica servicio
+digital. Por eso el nivel pagado promete días hábiles y no inmediatez.
+
+Tres límites legales que el código ya respeta y que no conviene aflojar:
+
+- **Estudio de títulos sólo con firma de abogado.** La pauta del Colegio de
+  Abogados exige conclusión, detalle de los defectos, fecha, firma y datos del
+  abogado, que responde por lo que sostiene. Mientras no haya firma, el nivel
+  pagado se llama "carpeta de títulos"; el nombre lo decide `nombreDelNivel` a
+  partir de `firmadoEn`, no una constante que alguien pueda cambiar sin pensar.
+  Por lo mismo existe el rol `abogado`: sin él no se distingue una firma válida
+  de cualquier usuario apretando el botón.
+- **El nivel gratis dice qué no es.** La Ley 19.496 sanciona la publicidad
+  engañosa con hasta 1500 UTM, y engañosa incluye inducir a error por omisión o
+  ambigüedad. `LIMITES_ANTECEDENTES` se muestra completo dentro del informe y
+  resumido en la oferta, nunca en letra chica.
+- **Los datos del vendedor necesitan base de licitud.** La Ley 21.719 entra en
+  plena vigencia el 1 de diciembre de 2026 y terminó con el atajo que servía
+  acá: bajo la Ley 19.628 bastaba que el dato estuviera en una fuente de acceso
+  público. Ya no. Que la inscripción del Conservador sea pública no habilita por
+  sí solo a republicarla en algo que vendemos. La base que usamos es el
+  consentimiento del vendedor, guardado en `consentimientos` con la versión del
+  texto que aceptó, la fecha y la IP: lo que se fiscaliza es evidencia fechada,
+  no un booleano. Las secciones con `requiereConsentimiento` salen vacías y con
+  el motivo a la vista si no hay autorización vigente.
+
+Dos cosas más del diseño:
+
+- **El informe es una foto, no una vista.** `Informe.contenido` guarda lo
+  entregado y no se recalcula al abrirlo. Los certificados del Conservador
+  vencen a los 30 días en la práctica bancaria, así que un informe regenerado
+  mostraría datos distintos de los que el comprador usó para ofertar. Como esas
+  fotos son inmutables y viven para siempre, el renderizador del frontend tiene
+  que aguantar formas que ya no emitimos.
+- **Fuente sin conectar se dice, no se inventa.** El avalúo y las contribuciones
+  salen hoy con "fuente por conectar" en vez de un número plausible. El comprador
+  va a decidir una compra con esto.
+
+Los montos del catálogo son del Conservador de Santiago ($13.500 la carpeta de
+10 años) y cambian por territorio. El precio de venta es un placeholder en
+`PRECIO_INFORME_TITULOS_CLP`, como `UF_FALLBACK_CLP`: se congela en cada informe
+al pedirlo, así que cambiarlo no altera lo ya cobrado.
+
 ## Visitas
 
 El vendedor declara ventanas semanales (`disponibilidad_visitas`, hora de pared
@@ -206,6 +259,18 @@ PUT   /api/v1/propiedades/:id/disponibilidad Bearer (solo el dueño)  { bloques 
 POST  /api/v1/propiedades/:id/visitas        Bearer  { inicio, mensaje? }
 GET   /api/v1/propiedades/:id/visitas        Bearer (solo el dueño)
 
+POST  /api/v1/propiedades/:id/informes/antecedentes   Bearer  → informe gratis, al instante
+POST  /api/v1/propiedades/:id/informes/titulos        Bearer  → pedido, estado esperando_pago
+GET   /api/v1/propiedades/:id/consentimiento          Bearer
+PUT   /api/v1/propiedades/:id/consentimiento          Bearer (solo el dueño)
+DELETE /api/v1/propiedades/:id/consentimiento         Bearer (solo el dueño)
+
+GET   /api/v1/informes/catalogo              público: qué trae cada nivel, precio y plazo
+GET   /api/v1/informes/mios                  Bearer
+GET   /api/v1/informes/:id                   Bearer (solo el comprador)
+PATCH /api/v1/informes/:id/firma             Bearer, rol abogado  { conclusion, defectos }
+PATCH /api/v1/informes/:id/estado            Bearer, rol admin    { estado }
+
 GET   /api/v1/visitas/mias                   Bearer
 GET   /api/v1/visitas/agenda                 Bearer, rol asesor  ?dia=2026-09-19
 GET   /api/v1/visitas/por-asignar            Bearer, rol asesor
@@ -238,13 +303,7 @@ Para cambios de UI: levantar y mirarlo en el navegador, no sólo compilar.
 Cuatro definiciones tomadas para las etapas que siguen. No volver a discutirlas
 sin el dueño del producto:
 
-- **El informe va en dos niveles.** Uno instantáneo y gratis, armado sólo con lo
-  automatizable (avalúo del SII por rol, datos de la publicación), que sirve de
-  gancho; y uno pagado con los certificados reales del Conservador, con plazo de
-  2 a 5 días hábiles. Eso obliga a un estado "en preparación" y a avisarle al
-  comprador: no hay API de Conservador, los ~80 son independientes y casi
-  ninguno tiene servicio digital. El nivel gratis nunca puede presentarse como
-  estudio de títulos.
+- **El informe va en dos niveles.** Ya construido; ver la sección del informe.
 - **La modalidad de visita la elige el vendedor por propiedad.** Ya construido.
 - **La promesa se firma con DocuSign**, aprovechando las llaves que ya están en
   `.env.example`. Ojo con el límite legal: DocuSign por sí solo no entrega firma
@@ -257,6 +316,22 @@ sin el dueño del producto:
   documentos derivan al informe o a una persona: afirmar que una propiedad no
   tiene hipoteca es una declaración material en una compraventa. Es además el
   embudo natural hacia el informe pagado.
+
+## Fuentes legales consultadas
+
+Para lo que afirma el catálogo del informe. Conviene reconfirmarlas con abogado
+antes de producción, y revisar la 21.719 después del 1 de diciembre de 2026.
+
+- Ley 21.719, protección de datos: https://www.bcn.cl/leychile/navegar?idNorma=1209272
+- Síntesis de la 21.719 (BCN): https://obtienearchivo.bcn.cl/obtienearchivo?id=repositorio%2F10221%2F37137%2F1%2FInforme_12_25_Ley_Datos_Personales_rev.pdf
+- Ley 19.496, consumidor y publicidad engañosa: https://www.bcn.cl/leychile/navegar?idNorma=61438
+- Pautas para el estudio de títulos, Colegio de Abogados: https://archivo.colegioabogados.cl/cgi-bin/procesa.pl?plantilla=%2Fv2%2Farchivo.html&bri=colegioabogados&tab=art_1&campo=c_archivo&id=828
+- Carpeta de estudio de títulos 10 años (CBR Santiago): https://www.conservador.cl/portal/titulo10a
+- Carpeta de títulos en ChileAtiende: https://www.chileatiende.gob.cl/fichas/30436-carpeta-de-estudio-de-titulos-de-hasta-10-anos
+- Certificado de hipotecas, gravámenes y prohibiciones: https://www.chileatiende.gob.cl/fichas/457-certificado-de-los-registros-de-hipotecas-gravamenes-y-prohibiciones-de-una-propiedad-gp
+- Certificado de avalúo fiscal (SII): https://www.sii.cl/servicios_online/1048-.html
+- Informe de no expropiación: https://www.chileatiende.gob.cl/fichas/30291-informe-de-no-expropiacion
+- Reglamento de la Ley 21.442, copropiedad: https://www.minvu.gob.cl/wp-content/uploads/2025/01/Reglamento-de-la-ley-21442.pdf
 
 ## Documentos de estrategia
 

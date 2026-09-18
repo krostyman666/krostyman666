@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import GaleriaFotos from '@/components/GaleriaFotos';
 import MapaPropiedad from '@/components/MapaPropiedad';
+import OfertaInforme from '@/components/OfertaInforme';
 import SolicitarVisita from '@/components/SolicitarVisita';
 import {
   ETIQUETA_TIPO,
@@ -214,8 +215,9 @@ export default async function PropiedadPage({ params }: { params: Promise<{ id: 
             </section>
           </div>
 
-          <aside className="lg:sticky lg:top-24 lg:self-start">
+          <aside className="space-y-5 lg:sticky lg:top-24 lg:self-start">
             <SolicitarVisita propiedadId={propiedad.id} comuna={propiedad.comuna} />
+            <OfertaInforme propiedadId={propiedad.id} />
           </aside>
         </div>
       </main>

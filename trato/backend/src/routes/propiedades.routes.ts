@@ -3,6 +3,7 @@ import Joi from 'joi';
 import * as controlador from '../controllers/propiedades.controller';
 import * as notarias from '../controllers/notarias.controller';
 import * as visitas from '../controllers/visitas.controller';
+import * as informes from '../controllers/informes.controller';
 import { autenticar, autenticarOpcional } from '../middleware/autenticar';
 import { validarCuerpo } from '../middleware/validar';
 import {
@@ -53,6 +54,14 @@ router.post(
   visitas.solicitar,
 );
 router.get('/:id/visitas', autenticar, visitas.dePropiedad);
+
+// Informe del inmueble. El comprador pide; el vendedor autoriza qué se divulga.
+router.post('/:id/informes/antecedentes', autenticar, informes.emitirAntecedentes);
+router.post('/:id/informes/titulos', autenticar, informes.pedirTitulos);
+
+router.get('/:id/consentimiento', autenticar, informes.verConsentimiento);
+router.put('/:id/consentimiento', autenticar, informes.otorgarConsentimiento);
+router.delete('/:id/consentimiento', autenticar, informes.revocarConsentimiento);
 router.patch(
   '/:id/notaria',
   autenticar,
