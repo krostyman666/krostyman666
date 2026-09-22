@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, raw } from 'express';
 import Joi from 'joi';
 import * as controlador from '../controllers/propiedades.controller';
 import * as notarias from '../controllers/notarias.controller';
@@ -73,6 +73,22 @@ router.patch(
   autenticar,
   validarCuerpo(actualizarDocumentoSchema),
   controlador.actualizarDocumento,
+);
+
+// El archivo va como cuerpo crudo. `type: () => true` deja que cualquier
+// Content-Type llegue como Buffer, para que el rechazo por tipo lo dé el
+// servicio con un mensaje claro en vez de un 415 mudo. El límite es apenas
+// mayor que el del dominio (15 MB) para que el mensaje amable gane al 413.
+router.post(
+  '/documentos/:documentoId/archivo',
+  autenticar,
+  raw({ type: () => true, limit: '16mb' }),
+  controlador.subirArchivoDocumento,
+);
+router.get(
+  '/documentos/:documentoId/archivo',
+  autenticar,
+  controlador.descargarArchivoDocumento,
 );
 
 export default router;

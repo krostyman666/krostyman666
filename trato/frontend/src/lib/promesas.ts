@@ -68,6 +68,28 @@ export interface RespuestaPromesa {
   catalogo: DefinicionClausulaApi[];
 }
 
+export interface FirmaApi {
+  rol: 'comprador' | 'vendedor';
+  nombre: string;
+  firmadoEn: string;
+  /** El texto guardado sigue dando su hash: nadie tocó el registro de la firma. */
+  integra: boolean;
+}
+
+export interface EstadoFirmaApi {
+  /** El contrato completo, tal como se firma. */
+  texto: string;
+  /** SHA-256 del texto: la huella de lo que se firma. */
+  hash: string;
+  proveedor: 'simple' | 'docusign';
+  /** Por qué no se puede firmar todavía, o null si se puede. */
+  bloqueo: string | null;
+  firmas: FirmaApi[];
+  yaFirmaste: boolean;
+  puedesFirmar: boolean;
+  estaFirmada: boolean;
+}
+
 export const ETIQUETA_ESTADO_PROMESA: Record<EstadoPromesa, string> = {
   negociando: 'En negociación',
   acordada: 'Acordada',

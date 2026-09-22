@@ -127,6 +127,17 @@ export async function validarDocumento(
     );
   }
 
+  // Aprobar sin archivo sería aprobar la palabra de que existe. La notaría
+  // responde por lo que valida, así que necesita el papel a la vista. Observarlo
+  // sí se puede: "falta subir el archivo" es justamente lo que hay que decirle
+  // al vendedor.
+  if (validacion === 'aprobado' && !documento.archivoUrl) {
+    throw ErrorApi.solicitudInvalida(
+      'No se puede aprobar un documento sin archivo adjunto',
+      'documento_sin_archivo',
+    );
+  }
+
   if (validacion === 'observado' && !observacionNotaria?.trim()) {
     throw ErrorApi.solicitudInvalida(
       'Para observar un documento hay que decir qué corregir',

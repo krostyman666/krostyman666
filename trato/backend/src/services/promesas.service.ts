@@ -2,6 +2,7 @@ import { Op } from 'sequelize';
 import { sequelize } from '../config/database';
 import { Promesa } from '../models/Promesa';
 import { ClausulaPromesa } from '../models/ClausulaPromesa';
+import { FirmaPromesa } from '../models/FirmaPromesa';
 import { Propiedad } from '../models/Propiedad';
 import { Usuario } from '../models/Usuario';
 import { ErrorApi } from '../utils/ErrorApi';
@@ -20,6 +21,24 @@ const ESTADOS_ABIERTOS = ['negociando', 'acordada'];
 function formatearPrecio(monto: number, moneda: string): string {
   const n = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 }).format(monto);
   return moneda === 'uf' ? `UF ${n}` : `$${n}`;
+}
+
+/**
+ * Formatea la fecha de escritura para el texto de la cláusula. Es un DATEONLY:
+ * se arma en UTC a partir de sus partes para que no se corra un día al pasar por
+ * la zona horaria, que es el error clásico con fechas sin hora.
+ */
+function formatearFecha(fecha: Date | string | null): string | null {
+  if (!fecha) return null;
+  const iso = typeof fecha === 'string' ? fecha : fecha.toISOString();
+  const [ano, mes, dia] = iso.slice(0, 10).split('-').map(Number);
+  if (!ano || !mes || !dia) return null;
+  return new Intl.DateTimeFormat('es-CL', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(ano, mes - 1, dia)));
 }
 
 /**
@@ -46,6 +65,9 @@ function armarTexto(codigo: string, propiedad: Propiedad, promesa: Promesa): str
       promesa.pie === null
         ? null
         : formatearPrecio(promesa.precio - promesa.pie, promesa.moneda),
+    // La fecha de escritura la da el comprador al abrir; llena el plazo, que es
+    // cláusula obligatoria. Sin esto quedaba con {fecha} y no se podía aceptar.
+    fecha: formatearFecha(promesa.fechaEscritura),
   };
 
   return def.plantilla.replace(/\{(\w+)\}/g, (marcador, clave: string) => {
@@ -318,6 +340,17 @@ export async function reabrir(promesaId: string, usuarioId: string): Promise<Pro
   if (promesa.estado !== 'acordada') {
     throw ErrorApi.conflicto('Sólo una promesa acordada y sin firmar se puede reabrir');
   }
+
+  // Si una parte ya firmó, reabrir cambiaría el texto que firmó por debajo. Su
+  // firma dejaría de valer sin que lo sepa, así que no se reabre: para cambiar
+  // el contrato hay que desistir y abrir otro.
+  if ((await FirmaPromesa.count({ where: { promesaId } })) > 0) {
+    throw ErrorApi.conflicto(
+      'Ya hay una firma en esta promesa. Para cambiarla, hay que desistir y abrir una nueva.',
+      'promesa_con_firma',
+    );
+  }
+
   return promesa.update({ estado: 'negociando', acordadaEn: null });
 }
 

@@ -28,6 +28,7 @@ import './models/SolicitudDatos';
 import './models/Pago';
 import './models/Promesa';
 import './models/ClausulaPromesa';
+import './models/FirmaPromesa';
 import './models/MensajeBot';
 
 const app = express();

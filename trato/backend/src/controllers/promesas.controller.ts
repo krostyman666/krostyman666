@@ -1,5 +1,6 @@
 import type { RequestHandler } from 'express';
 import * as servicio from '../services/promesas.service';
+import * as firma from '../services/firma.service';
 import { ErrorApi } from '../utils/ErrorApi';
 import { CLAUSULAS, PLAZOS_SUGERIDOS, REQUISITOS_1554 } from '../dominio/promesa';
 
@@ -106,6 +107,22 @@ export const revisar: RequestHandler = async (req, res, next) => {
   try {
     const promesa = await servicio.revisar(req.params.promesaId, exigirAuth(req));
     res.json({ promesa });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const estadoFirma: RequestHandler = async (req, res, next) => {
+  try {
+    res.json(await firma.estado(req.params.promesaId, exigirAuth(req)));
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const firmar: RequestHandler = async (req, res, next) => {
+  try {
+    res.json(await firma.firmar(req.params.promesaId, exigirAuth(req), req.ip ?? null));
   } catch (error) {
     next(error);
   }

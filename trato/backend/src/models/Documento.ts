@@ -75,8 +75,14 @@ export class Documento extends Model<
 
   toJSON(): Record<string, unknown> {
     const def = POR_CODIGO.get(this.codigo);
+    const base = super.toJSON() as Record<string, unknown>;
+    // `archivoUrl` es la clave interna de almacenamiento, no una URL que el
+    // cliente deba ver ni pueda usar. Se reemplaza por un booleano; el archivo
+    // se baja por el endpoint autenticado, nunca por esta clave.
+    delete base.archivoUrl;
     return {
-      ...(super.toJSON() as Record<string, unknown>),
+      ...base,
+      tieneArchivo: this.archivoUrl !== null,
       nombre: def?.nombre ?? this.codigo,
       emisor: def?.emisor ?? null,
       responsable: def?.responsable ?? null,

@@ -33,9 +33,9 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Conexión a SII y Tesorería para avalúo y contribuciones | Pendiente |
 | Bot de preguntas del comprador, con cola interna de derivaciones | Listo, probado en navegador |
 | Promesa: negociación de cláusulas entre las partes | Listo, probado en navegador |
-| Firma de la promesa (DocuSign) | Pendiente — falta contratar y poner credenciales |
+| Firma de la promesa por ambas partes | Listo con firma electrónica simple; FEA pendiente de proveedor |
 | Compraventa y escritura | Pendiente |
-| Subida de archivos de documentos | Pendiente |
+| Subida de archivos de documentos | Listo, probado en navegador; a disco local hasta conectar S3 |
 | Integraciones externas | Pendiente — ver doc de integraciones |
 
 ## Estructura
@@ -142,6 +142,34 @@ Cuatro reglas que no son obvias y conviene no romper:
 Los plazos de vigencia del catálogo llevan advertencia en el archivo: hay que
 confirmarlos con abogado antes de producción.
 
+### Los archivos del expediente
+
+`backend/src/services/almacenamiento.service.ts` guarda; `dominio/archivos.ts`
+decide qué se acepta. Cuatro reglas:
+
+- **El tipo se decide por el contenido, no por lo que declara el cliente.** El
+  `Content-Type` y la extensión los controla quien sube, así que un ejecutable
+  renombrado a `.pdf` pasaría cualquier chequeo que confíe en ellos. Se miran
+  los primeros bytes —la firma del formato— y si no calzan con lo declarado se
+  rechaza. Un expediente que acepta lo que le digan es una vía de subida de
+  malware con cara de certificado.
+- **La clave la genera el servidor.** El nombre del archivo del vendedor no toca
+  la ruta de disco, y `resolverLocal` verifica que lo pedido caiga dentro del
+  directorio: sin eso, un `../..` leería o escribiría fuera del expediente.
+- **Los archivos nunca son públicos.** No hay URL estática: se bajan por un
+  endpoint que pasa por `exigirAccesoAlExpediente` (dueño, su notaría, equipo
+  interno). `Documento.toJSON` ni siquiera expone la clave de almacenamiento;
+  manda `tieneArchivo`, que es lo único que el cliente necesita.
+- **La notaría no puede aprobar un documento sin archivo.** Aprobar sin papel es
+  aprobar la palabra de que existe, y la notaría responde por lo que valida.
+  Observarlo sí se puede: "falta subir el archivo" es justamente lo que hay que
+  decirle al vendedor.
+
+El driver es `local` y escribe al disco del backend, que alcanza para
+desarrollo. En producción hay que pasar a S3 (llaves ya reservadas): el disco
+del contenedor es efímero y no se comparte entre instancias. El resto del código
+habla con `almacenamiento`, no con el disco, para que ese cambio sea un archivo.
+
 ## La ficha pública y el límite con el expediente
 
 `GET /propiedades/:id` pasa por `autenticarOpcional`: sin sesión devuelve
@@ -241,6 +269,55 @@ firmar: la promesa acordada la revisa un abogado antes de la firma, y por eso
 `revisar()` rechaza una cuenta de abogado sin RUT vigente. Los plazos (60 días
 con fondos propios, 90 a 120 con crédito) y los porcentajes de multa (5% a 20%)
 son prácticas de mercado, no reglas legales.
+
+`armarTexto` llena `{fecha}` en el plazo desde `fechaEscritura`, que el
+comprador ya dio al abrir. Sin eso la cláusula obligatoria quedaba con el hueco
+a la vista y no se podía aceptar, o sea la promesa no llegaba nunca a acordada
+aunque el dato estuviera. Los marcadores de las negociables —`{monto}`,
+`{porcentaje}`, `{banco}`— sí quedan para que las partes los llenen: son
+términos que se negocian, no datos que ya tengamos.
+
+## La firma de la promesa
+
+`backend/src/dominio/firma.ts`. La promesa es un contrato entre las partes, no
+una escritura pública, así que la ley chilena admite firmarla electrónicamente.
+La compraventa definitiva **no**: va ante notario y ninguna firma electrónica la
+reemplaza. Esa línea no se cruza desde acá.
+
+**Simple, no avanzada, y se dice.** La Ley 19.799 distingue la firma electrónica
+simple de la avanzada (FEA). Las dos valen; la avanzada, de un prestador
+acreditado, se presume del firmante. Sin proveedor contratado firmamos con
+simple —válida para una promesa, con menor valor probatorio— y el aviso está en
+la UI, no en letra chica. DocuSign por sí solo tampoco entrega FEA reconocida en
+Chile; hay que sumar un prestador local. Entra por `env.firma.proveedor`.
+
+Lo que sostiene el valor probatorio de una firma simple es la evidencia
+alrededor. Por eso:
+
+- **Cada firma guarda el documento íntegro y su hash SHA-256**, no un booleano
+  de "firmó". Lo que se discute es qué firmó, y la huella hace detectable
+  cualquier cambio posterior.
+- **Con la primera firma el contrato queda congelado.** La segunda parte firma
+  exactamente los mismos bytes, no una composición nueva del mismo contenido. Si
+  se volviera a renderizar, un cambio de plantilla nuestro —un deploy— dejaría a
+  cada parte firmando un documento distinto y el hash dejaría de significar
+  algo. Verificado: dos firmas, un solo texto y un solo hash.
+- **La integridad se comprueba contra el propio registro**: el texto guardado
+  tiene que seguir dando su hash guardado. Eso detecta que alguien edite la
+  fila, y no se dispara solo porque cambiemos la plantilla.
+- **No se firma sin revisión de abogado.** `motivoDeBloqueo` exige acordada y
+  `revisadaEn`. Firmar es el último paso.
+- **Reabrir con una firma puesta está prohibido.** Cambiaría el texto que esa
+  parte ya firmó, por debajo y sin que lo sepa. Para cambiar el contrato hay que
+  desistir y abrir otro.
+- Nadie fuera de las partes firma, nadie firma dos veces, y el cierre va con
+  `lock: t.LOCK.UPDATE` sobre la promesa para que dos firmas simultáneas no la
+  dejen a medio cerrar. Ojo: Postgres no admite `FOR UPDATE` junto al outer join
+  de los `include`, así que se bloquea la fila sola y las asociaciones se cargan
+  aparte.
+
+El RUT del contrato va formateado con `formatearRut`: es un contrato, no un
+campo de base de datos.
 
 ## El bot de la ficha
 
@@ -479,6 +556,8 @@ PATCH /api/v1/propiedades/:id                Bearer (solo el dueño)
 PATCH /api/v1/propiedades/:id/estado         Bearer (solo el dueño)
 GET   /api/v1/propiedades/:id/informe        Bearer (dueño, su notaría o interno)
 PATCH /api/v1/propiedades/documentos/:docId  Bearer (solo el dueño)
+POST  /api/v1/propiedades/documentos/:docId/archivo  Bearer (dueño) ?fechaEmision= · cuerpo = archivo crudo
+GET   /api/v1/propiedades/documentos/:docId/archivo  Bearer (dueño, su notaría o interno)
 PATCH /api/v1/propiedades/:id/notaria        Bearer (solo el dueño)
 GET   /api/v1/propiedades/:id/listo-para-escriturar   Bearer
 GET   /api/v1/propiedades/catalogo-documentos
@@ -506,6 +585,8 @@ PATCH /api/v1/promesas/:id/acordar           Bearer → verifica el 1554
 PATCH /api/v1/promesas/:id/reabrir           Bearer
 PATCH /api/v1/promesas/:id/desistir          Bearer { motivo }
 PATCH /api/v1/promesas/:id/revision          Bearer, rol abogado
+GET   /api/v1/promesas/:id/firma             Bearer (parte) → contrato, hash, quién firmó
+PATCH /api/v1/promesas/:id/firmar            Bearer (parte) → firma electrónica simple
 
 GET   /api/v1/bot/sugeridas                   público: preguntas de arranque
 GET   /api/v1/bot/propiedad/:id              público: historial de una sesión  ?sesion=
@@ -570,12 +651,13 @@ sin el dueño del producto:
 
 - **El informe va en dos niveles.** Ya construido; ver la sección del informe.
 - **La modalidad de visita la elige el vendedor por propiedad.** Ya construido.
-- **La promesa se firma con DocuSign**, aprovechando las llaves que ya están en
-  `.env.example`. Ojo con el límite legal: DocuSign por sí solo no entrega firma
+- **La promesa se firma en la plataforma.** Ya construido; ver la sección de la
+  firma. Hoy con firma electrónica simple, que es válida para una promesa. El
+  límite legal sigue en pie: ni DocuSign ni nadie sin acreditación entrega firma
   electrónica avanzada reconocida en Chile, así que si la promesa necesita valor
-  probatorio fuerte hay que sumar un socio local. Y la compraventa definitiva no
-  se firma electrónicamente en ningún caso: va por escritura pública ante
-  notario.
+  probatorio fuerte hay que sumar un prestador local; entra por
+  `env.firma.proveedor`. Y la compraventa definitiva no se firma
+  electrónicamente en ningún caso: va por escritura pública ante notario.
 - **El bot responde la publicación y el proceso, nada legal.** Ya construido;
   ver la sección del bot. Metros, distribución, gastos comunes, cómo funciona la
   comisión. Estado legal, precio o documentos derivan al informe o a una
@@ -617,6 +699,7 @@ Para los medios de cobro:
 Para la promesa:
 
 - Artículo 1554 del Código Civil: https://leyes-cl.com/codigo_civil/1554.htm
+- Ley 19.799, firma electrónica y servicios de certificación: https://www.bcn.cl/leychile/navegar?idNorma=196640
 - El contrato de promesa (Juan Andrés Orrego): https://www.juanandresorrego.cl/assets/pdf/apu/ap_6/Contrato%20de%20Promesa.pdf
 - Promesa de compraventa de inmueble, requisitos: https://toroblancoabogados.cl/promesa-compraventa-inmueble-chile/
 

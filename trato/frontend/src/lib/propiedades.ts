@@ -76,6 +76,7 @@ export interface DocumentoApi {
   validacion: 'sin_revisar' | 'en_revision' | 'aprobado' | 'observado';
   observacionNotaria: string | null;
   conforme: boolean;
+  tieneArchivo: boolean;
 }
 
 export interface InformeApi {

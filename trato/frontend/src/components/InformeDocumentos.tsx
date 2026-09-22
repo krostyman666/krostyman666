@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Check, Clock, FileText } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AlertTriangle, Check, Clock, Eye, FileText, Upload } from 'lucide-react';
 import { api, mensajeDeError } from '@/lib/api';
 import {
   ETIQUETA_EMISOR,
@@ -10,6 +10,13 @@ import {
   type DocumentoApi,
   type InformeApi,
 } from '@/lib/propiedades';
+import {
+  ACCEPT_ARCHIVOS,
+  LIMITE_MB,
+  abrirArchivo,
+  subirArchivo,
+  tipoAceptado,
+} from '@/lib/documentos';
 
 function textoBadge(doc: DocumentoApi): string {
   if (doc.vencido) return 'Vencido';
@@ -29,7 +36,6 @@ function claseBadge(doc: DocumentoApi): string {
 export default function InformeDocumentos({ propiedadId }: { propiedadId: string }) {
   const [informe, setInforme] = useState<InformeApi | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [guardando, setGuardando] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     try {
@@ -43,22 +49,6 @@ export default function InformeDocumentos({ propiedadId }: { propiedadId: string
   useEffect(() => {
     cargar();
   }, [cargar]);
-
-  async function marcarRecibido(doc: DocumentoApi) {
-    setGuardando(doc.id);
-    setError(null);
-    try {
-      await api.patch(`/propiedades/documentos/${doc.id}`, {
-        estado: 'recibido',
-        fechaEmision: new Date().toISOString(),
-      });
-      await cargar();
-    } catch (e) {
-      setError(mensajeDeError(e));
-    } finally {
-      setGuardando(null);
-    }
-  }
 
   if (error && !informe) {
     return <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>;
@@ -186,16 +176,7 @@ export default function InformeDocumentos({ propiedadId }: { propiedadId: string
                         </span>
                       )}
 
-                    {doc.estado !== 'recibido' || doc.vencido ? (
-                      <button
-                        type="button"
-                        onClick={() => marcarRecibido(doc)}
-                        disabled={guardando === doc.id}
-                        className="rounded-lg px-2.5 py-1 text-xs font-medium text-trato-700 transition hover:bg-trato-50 disabled:opacity-50"
-                      >
-                        {guardando === doc.id ? 'Guardando...' : 'Ya lo tengo'}
-                      </button>
-                    ) : null}
+                    <ArchivoDoc doc={doc} onHecho={cargar} onError={setError} />
                   </div>
                 </div>
               </li>
@@ -203,6 +184,146 @@ export default function InformeDocumentos({ propiedadId }: { propiedadId: string
           </ul>
         </section>
       ))}
+    </div>
+  );
+}
+
+/** Fecha de hoy en YYYY-MM-DD, hora de pared local. Sirve de valor por defecto
+ * para la fecha de emisión al subir. */
+function hoyISO(): string {
+  const ahora = new Date();
+  const local = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
+
+/**
+ * Subir, ver y reemplazar el archivo de un documento.
+ *
+ * Subir un archivo es marcarlo recibido: por eso pide la fecha de emisión, que
+ * es la que fija la vigencia. Reemplazarlo manda la notaría a revisarlo de
+ * nuevo, así que se avisa. El archivo no se abre con un enlace directo —no es
+ * público— sino que se baja con la sesión y se abre en una pestaña.
+ */
+function ArchivoDoc({
+  doc,
+  onHecho,
+  onError,
+}: {
+  doc: DocumentoApi;
+  onHecho: () => void;
+  onError: (m: string) => void;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const [fecha, setFecha] = useState(hoyISO());
+  const [subiendo, setSubiendo] = useState(false);
+  const [viendo, setViendo] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function alElegir(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!tipoAceptado(file)) {
+      onError('El archivo tiene que ser PDF, JPG o PNG.');
+      return;
+    }
+    if (file.size > LIMITE_MB * 1024 * 1024) {
+      onError(`El archivo no puede pesar más de ${LIMITE_MB} MB.`);
+      return;
+    }
+    setSubiendo(true);
+    onError('');
+    try {
+      await subirArchivo(doc.id, file, fecha);
+      setAbierto(false);
+      onHecho();
+    } catch (err) {
+      onError(mensajeDeError(err));
+    } finally {
+      setSubiendo(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  }
+
+  async function ver() {
+    setViendo(true);
+    onError('');
+    try {
+      await abrirArchivo(doc.id);
+    } catch (err) {
+      onError(mensajeDeError(err));
+    } finally {
+      setViendo(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      {doc.tieneArchivo && (
+        <button
+          type="button"
+          onClick={ver}
+          disabled={viendo}
+          className="inline-flex items-center gap-1 text-xs font-medium text-trato-700 transition hover:text-trato-800 disabled:opacity-50"
+        >
+          <Eye className="h-3.5 w-3.5" />
+          {viendo ? 'Abriendo...' : 'Ver archivo'}
+        </button>
+      )}
+
+      {!abierto ? (
+        <button
+          type="button"
+          onClick={() => setAbierto(true)}
+          className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-trato-700 transition hover:bg-trato-50"
+        >
+          <Upload className="h-3.5 w-3.5" />
+          {doc.tieneArchivo ? 'Reemplazar' : 'Subir archivo'}
+        </button>
+      ) : (
+        <div className="flex flex-col items-end gap-1.5 rounded-lg bg-tinta/[0.03] p-2.5">
+          <label className="text-[11px] text-tinta-tenue">
+            Fecha de emisión del documento
+            <input
+              type="date"
+              value={fecha}
+              max={hoyISO()}
+              onChange={(e) => setFecha(e.target.value)}
+              className="mt-1 block rounded-md border border-tinta/15 px-2 py-1 text-xs text-tinta outline-none focus:border-trato-500"
+            />
+          </label>
+          {/* El input va oculto: el botón nativo trae su texto del navegador
+              ("Choose File") y en una app en español eso se lee como un error. */}
+          <label
+            className={`inline-flex cursor-pointer items-center gap-1 rounded-md bg-trato-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-trato-700 ${
+              subiendo || !fecha ? 'pointer-events-none opacity-50' : ''
+            }`}
+          >
+            <Upload className="h-3.5 w-3.5" />
+            {subiendo ? 'Subiendo...' : 'Elegir archivo'}
+            <input
+              ref={inputRef}
+              type="file"
+              accept={ACCEPT_ARCHIVOS}
+              onChange={alElegir}
+              disabled={subiendo || !fecha}
+              className="sr-only"
+            />
+          </label>
+          <p className="text-[11px] text-tinta-tenue">PDF, JPG o PNG · hasta {LIMITE_MB} MB</p>
+          <button
+            type="button"
+            onClick={() => setAbierto(false)}
+            className="text-[11px] font-medium text-tinta-tenue hover:text-tinta"
+          >
+            Cancelar
+          </button>
+          {doc.tieneArchivo && (
+            <p className="max-w-[12rem] text-right text-[11px] leading-tight text-tinta-tenue">
+              Reemplazarlo hace que la notaría lo revise de nuevo.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

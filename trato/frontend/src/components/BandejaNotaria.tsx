@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Check, FileText, Inbox, MessageSquareWarning } from 'lucide-react';
+import { Check, Eye, FileText, Inbox, MessageSquareWarning } from 'lucide-react';
 import { api, mensajeDeError } from '@/lib/api';
 import { ETIQUETA_EMISOR, type DocumentoApi } from '@/lib/propiedades';
+import { abrirArchivo } from '@/lib/documentos';
 import { formatearRut } from '@/lib/rut';
 
 interface Caso {
@@ -22,6 +23,7 @@ export default function BandejaNotaria() {
   const [observando, setObservando] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
   const [ocupado, setOcupado] = useState<string | null>(null);
+  const [viendo, setViendo] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     try {
@@ -35,6 +37,18 @@ export default function BandejaNotaria() {
   useEffect(() => {
     cargar();
   }, [cargar]);
+
+  async function ver(docId: string) {
+    setViendo(docId);
+    setError(null);
+    try {
+      await abrirArchivo(docId);
+    } catch (e) {
+      setError(mensajeDeError(e));
+    } finally {
+      setViendo(null);
+    }
+  }
 
   async function validar(docId: string, validacion: 'aprobado' | 'observado') {
     if (validacion === 'observado' && !motivo.trim()) return;
@@ -120,13 +134,30 @@ export default function BandejaNotaria() {
                           ` · emitido ${new Date(doc.fechaEmision).toLocaleDateString('es-CL')}`}
                         {doc.diasParaVencer !== null && ` · vence en ${doc.diasParaVencer} días`}
                       </p>
+                      {!doc.tieneArchivo && (
+                        <p className="mt-1.5 flex items-center gap-1 text-xs font-medium text-amber-700">
+                          <MessageSquareWarning className="h-3.5 w-3.5" />
+                          Sin archivo adjunto: no hay qué revisar todavía.
+                        </p>
+                      )}
                     </div>
 
                     <div className="flex shrink-0 gap-2">
+                      {doc.tieneArchivo && (
+                        <button
+                          type="button"
+                          onClick={() => ver(doc.id)}
+                          disabled={viendo === doc.id}
+                          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-trato-700 ring-1 ring-trato-200 transition hover:bg-trato-50 disabled:opacity-50"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          {viendo === doc.id ? 'Abriendo...' : 'Ver'}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => validar(doc.id, 'aprobado')}
-                        disabled={ocupado === doc.id}
+                        disabled={ocupado === doc.id || !doc.tieneArchivo}
                         className="inline-flex items-center gap-1.5 rounded-lg bg-cierre-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-cierre-700 disabled:opacity-50"
                       >
                         <Check className="h-3.5 w-3.5" />

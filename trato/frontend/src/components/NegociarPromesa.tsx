@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { api, mensajeDeError } from '@/lib/api';
 import { useSesion } from '@/hooks/useSesion';
+import FirmarPromesa from '@/components/FirmarPromesa';
 import {
   COLOR_ESTADO_PROMESA,
   ETIQUETA_ESTADO_PROMESA,
@@ -306,6 +307,12 @@ export default function NegociarPromesa({ promesaId }: { promesaId: string }) {
             Reabrir la negociación
           </button>
         </section>
+      )}
+
+      {(promesa.estado === 'acordada' ||
+        promesa.estado === 'firmada' ||
+        promesa.estado === 'cumplida') && (
+        <FirmarPromesa promesaId={promesa.id} onFirmada={cargar} />
       )}
 
       <p className="mt-10 text-xs leading-relaxed text-tinta-tenue">

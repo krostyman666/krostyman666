@@ -42,6 +42,33 @@ export const env = {
     rut: process.env.COBRO_RUT ?? '',
     email: process.env.COBRO_EMAIL ?? '',
   },
+
+  /**
+   * Dónde se guardan los archivos del expediente. `local` escribe al disco del
+   * backend y sirve para desarrollo; en producción hay que pasar a `s3` (las
+   * llaves AWS ya están reservadas en `.env.example`), porque el disco del
+   * contenedor es efímero y no se comparte entre instancias. Nunca son públicos:
+   * son los papeles legales del vendedor y se sirven por endpoint autenticado.
+   */
+  almacenamiento: {
+    driver: (process.env.ALMACENAMIENTO_DRIVER ?? 'local') as 'local' | 's3',
+    dirLocal: process.env.ALMACENAMIENTO_DIR ?? path.resolve(__dirname, '../../../almacenamiento'),
+    s3Bucket: process.env.AWS_S3_BUCKET ?? '',
+    s3Region: process.env.AWS_REGION ?? '',
+  },
+
+  /**
+   * Firma de la promesa. Sin credenciales de un proveedor de firma electrónica
+   * avanzada, la plataforma firma con firma electrónica simple (Ley 19.799), que
+   * es válida para una promesa —contrato entre partes, no escritura pública—
+   * aunque con menor valor probatorio. DocuSign, o un proveedor local de FEA,
+   * entra por acá para subir ese valor probatorio sin rehacer el flujo.
+   */
+  firma: {
+    proveedor: (process.env.FIRMA_PROVEEDOR ?? 'simple') as 'simple' | 'docusign',
+    docusignBaseUrl: process.env.DOCUSIGN_BASE_URL ?? '',
+    docusignAccountId: process.env.DOCUSIGN_ACCOUNT_ID ?? '',
+  },
 } as const;
 
 export function cuentaDeCobroConfigurada(): boolean {

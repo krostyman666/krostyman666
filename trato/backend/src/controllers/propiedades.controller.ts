@@ -101,6 +101,53 @@ export const actualizarDocumento: RequestHandler = async (req, res, next) => {
   }
 };
 
+/**
+ * Sube el archivo de un documento. El cuerpo es el archivo crudo
+ * (`express.raw`), no multipart: un documento es un archivo, así que no hace
+ * falta el sobre de multipart ni una dependencia para parsearlo. El tipo llega
+ * en `Content-Type` y la fecha de emisión en el query; el tipo real se verifica
+ * contra el contenido en el servicio.
+ */
+export const subirArchivoDocumento: RequestHandler = async (req, res, next) => {
+  try {
+    const fecha = req.query.fechaEmision;
+    if (typeof fecha !== 'string' || Number.isNaN(new Date(fecha).getTime())) {
+      throw ErrorApi.solicitudInvalida(
+        'Falta la fecha de emisión del documento',
+        'falta_fecha_emision',
+      );
+    }
+    const contenido = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    const documento = await documentos.subirArchivo(
+      req.params.documentoId,
+      exigirAuth(req),
+      contenido,
+      req.headers['content-type']?.split(';')[0]?.trim() ?? '',
+      new Date(fecha),
+    );
+    res.json({ documento: documento.toJSON() });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const descargarArchivoDocumento: RequestHandler = async (req, res, next) => {
+  try {
+    const { contenido, tipo, nombre } = await documentos.descargarArchivo(
+      req.params.documentoId,
+      exigirAuth(req),
+    );
+    res.setHeader('Content-Type', tipo);
+    // inline: la notaría lo revisa en el navegador. El nombre es para cuando lo
+    // guarde. El archivo es del expediente, así que nunca se cachea en proxies.
+    res.setHeader('Content-Disposition', `inline; filename="${nombre}"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.send(contenido);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const catalogo: RequestHandler = (_req, res) => {
   res.json({ documentos: documentos.catalogoPublico() });
 };
