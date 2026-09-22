@@ -18,6 +18,7 @@ import {
 import GaleriaFotos from '@/components/GaleriaFotos';
 import MapaPropiedad from '@/components/MapaPropiedad';
 import AbrirPromesa from '@/components/AbrirPromesa';
+import BotPropiedad from '@/components/BotPropiedad';
 import OfertaInforme from '@/components/OfertaInforme';
 import SolicitarVisita from '@/components/SolicitarVisita';
 import {
@@ -217,8 +218,13 @@ export default async function PropiedadPage({ params }: { params: Promise<{ id: 
           </div>
 
           <aside className="space-y-5 lg:sticky lg:top-24 lg:self-start">
-            <SolicitarVisita propiedadId={propiedad.id} comuna={propiedad.comuna} />
-            <OfertaInforme propiedadId={propiedad.id} />
+            <BotPropiedad propiedadId={propiedad.id} />
+            <div id="visita" className="scroll-mt-24">
+              <SolicitarVisita propiedadId={propiedad.id} comuna={propiedad.comuna} />
+            </div>
+            <div id="informe" className="scroll-mt-24">
+              <OfertaInforme propiedadId={propiedad.id} />
+            </div>
             <AbrirPromesa
               propiedadId={propiedad.id}
               precio={propiedad.precio}

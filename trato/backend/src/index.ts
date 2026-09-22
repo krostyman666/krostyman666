@@ -14,6 +14,7 @@ import economiaRoutes from './routes/economia.routes';
 import datosPersonalesRoutes from './routes/datos-personales.routes';
 import pagosRoutes from './routes/pagos.routes';
 import promesasRoutes from './routes/promesas.routes';
+import botRoutes from './routes/bot.routes';
 import { manejarErrores, rutaNoEncontrada } from './middleware/manejarErrores';
 import './models/Usuario';
 import './models/Propiedad';
@@ -27,6 +28,7 @@ import './models/SolicitudDatos';
 import './models/Pago';
 import './models/Promesa';
 import './models/ClausulaPromesa';
+import './models/MensajeBot';
 
 const app = express();
 
@@ -55,6 +57,7 @@ app.use('/api/v1/economia', economiaRoutes);
 app.use('/api/v1/mis-datos', datosPersonalesRoutes);
 app.use('/api/v1/pagos', pagosRoutes);
 app.use('/api/v1/promesas', promesasRoutes);
+app.use('/api/v1/bot', botRoutes);
 
 app.use(rutaNoEncontrada);
 app.use(manejarErrores);

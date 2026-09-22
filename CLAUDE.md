@@ -31,7 +31,7 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Derechos del titular: acceso, rectificación, supresión, oposición, portabilidad | Listo, probado en navegador |
 | Registro de actividades de tratamiento y plazos de conservación | Listo; la purga de lo vencido se informa, no se ejecuta sola |
 | Conexión a SII y Tesorería para avalúo y contribuciones | Pendiente |
-| Bot de preguntas del comprador | Pendiente |
+| Bot de preguntas del comprador, con cola interna de derivaciones | Listo, probado en navegador |
 | Promesa: negociación de cláusulas entre las partes | Listo, probado en navegador |
 | Firma de la promesa (DocuSign) | Pendiente — falta contratar y poner credenciales |
 | Compraventa y escritura | Pendiente |
@@ -241,6 +241,58 @@ firmar: la promesa acordada la revisa un abogado antes de la firma, y por eso
 `revisar()` rechaza una cuenta de abogado sin RUT vigente. Los plazos (60 días
 con fondos propios, 90 a 120 con crédito) y los porcentajes de multa (5% a 20%)
 son prácticas de mercado, no reglas legales.
+
+## El bot de la ficha
+
+`backend/src/dominio/bot.catalogo.ts`. Responde al comprador en la ficha de la
+propiedad sobre dos cosas —la publicación (metros, distribución, precio de
+lista, modalidad de visita) y el proceso (agendar, informe, comisión, promesa,
+escritura)— y deriva todo lo demás. Es el embudo natural hacia el informe
+pagado.
+
+Las decisiones que lo hacen ponible en producción:
+
+- **Ninguna respuesta se genera.** El texto que lee el comprador sale siempre
+  del catálogo: o es una constante, o lo arma `responde()` con campos ya
+  guardados. Un modelo generativo no puede garantizar que no afirme un hecho
+  que nadie verificó, y en una compraventa ese hecho lo paga el comprador en la
+  escritura. El único lugar donde un modelo sería seguro es reemplazar
+  `detectarIntencion` —clasificar la pregunta dentro del conjunto cerrado de
+  temas—: una clasificación errada da una respuesta cierta fuera de lugar, o una
+  derivación, nunca una mentira.
+- **Las zonas reservadas ganan.** `ZONAS_RESERVADAS` son las materias que el bot
+  no afirma aunque tenga el dato: estado legal, deudas, valor real, consejo,
+  contacto del vendedor, dirección exacta. Se evalúan antes que los temas y
+  derivan. Afirmar el estado legal de un inmueble es una declaración material;
+  equivocarse es responsabilidad civil y publicidad engañosa (Ley 19.496, hasta
+  1.500 UTM, que incluye la inducción a error por omisión).
+- **La asimetría de la hipoteca.** `tieneHipoteca` existe y aun así el bot no
+  dice "no tiene hipoteca". Que el vendedor declare que SÍ hay se informa
+  (etiquetado como declaración suya); que no la haya declarado NO se desmiente,
+  porque eso lo certifica el Conservador. Vale igual para deudas, embargos y
+  prohibiciones: lo que suma riesgo se informa, lo que lo descarta se certifica.
+- **Derivar es la respuesta correcta, no una falla.** Cuando el bot dice "te
+  responde un asesor", esa promesa queda como fila en `mensajes_bot` con
+  `destino` y `atendidoEn`: es una cola de trabajo, no una cortesía. Sin la fila
+  el comprador espera una llamada que nadie sabe que debe hacer.
+- **Contesta sin sesión.** `usuarioId` es nullable a propósito: obligar a
+  registrarse para preguntar los metros espanta al comprador antes del embudo.
+  La `sesion` la genera el navegador y agrupa el hilo sin identificar a nadie.
+  El texto de la pregunta lo escribe la persona y se borra al suprimir la
+  cuenta, igual que `Visita.mensaje`.
+
+La cola interna (`/preguntas`, rol asesor o admin) parte en dos listas por
+**motivo**, no por urgencia, porque toda pregunta no entendida deriva a persona
+y partir por atención dejaría una lista siempre vacía:
+
+- **Derivó a una persona**: el bot entendió y aun así no contestó. Es el límite
+  funcionando; falta que alguien cierre con el comprador.
+- **No supo contestar**: el bot no entendió. También hay que responderle, y
+  además es la hoja de ruta de los temas que al catálogo le faltan. La métrica
+  que importa es `tasaSinEntender`: mientras suba, el catálogo queda corto.
+
+`backend/src/utils/formato.ts` existe sólo porque el bot arma frases en el
+backend: "UF 8400" en medio de una respuesta se lee como un error del sistema.
 
 ## Cobro
 
@@ -455,6 +507,13 @@ PATCH /api/v1/promesas/:id/reabrir           Bearer
 PATCH /api/v1/promesas/:id/desistir          Bearer { motivo }
 PATCH /api/v1/promesas/:id/revision          Bearer, rol abogado
 
+GET   /api/v1/bot/sugeridas                   público: preguntas de arranque
+GET   /api/v1/bot/propiedad/:id              público: historial de una sesión  ?sesion=
+POST  /api/v1/bot/propiedad/:id              autenticarOpcional { pregunta, sesion } → respuesta del catálogo
+GET   /api/v1/bot/pendientes                 Bearer, rol asesor|admin → derivaciones y no entendidas
+GET   /api/v1/bot/resumen                    Bearer, rol asesor|admin  ?desde=
+PATCH /api/v1/bot/mensajes/:id/atender       Bearer, rol asesor|admin { nota }
+
 GET   /api/v1/pagos/informe/:informeId       Bearer → medios, instrucciones y pagos del informe
 POST  /api/v1/pagos/informe/:informeId       Bearer { medio } → inicia el cobro
 PATCH /api/v1/pagos/:id/reportar             Bearer (comprador) → "ya transferí"
@@ -517,11 +576,12 @@ sin el dueño del producto:
   probatorio fuerte hay que sumar un socio local. Y la compraventa definitiva no
   se firma electrónicamente en ningún caso: va por escritura pública ante
   notario.
-- **El bot responde la publicación y el proceso, nada legal.** Metros,
-  orientación, gastos comunes, cómo funciona la comisión. Estado legal, precio o
-  documentos derivan al informe o a una persona: afirmar que una propiedad no
-  tiene hipoteca es una declaración material en una compraventa. Es además el
-  embudo natural hacia el informe pagado.
+- **El bot responde la publicación y el proceso, nada legal.** Ya construido;
+  ver la sección del bot. Metros, distribución, gastos comunes, cómo funciona la
+  comisión. Estado legal, precio o documentos derivan al informe o a una
+  persona: afirmar que una propiedad no tiene hipoteca es una declaración
+  material en una compraventa. Es además el embudo natural hacia el informe
+  pagado.
 
 ## Fuentes legales consultadas
 
