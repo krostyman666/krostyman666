@@ -20,6 +20,8 @@
     "expo-web-browser": "^13.0.0",
     "expo-location": "^16.5.0",
     "expo-sharing": "^12.0.0",
+    "expo-background-fetch": "^12.0.0",
+    "expo-task-manager": "^11.7.0",
     "react": "^18.2.0",
     "react-native": "^0.74.0",
     "react-native-gesture-handler": "^2.18.0",
@@ -30,6 +32,7 @@
     "@react-native-async-storage/async-storage": "^1.23.0",
     "@react-native-community/sqlite3": "^6.1.0",
     "libsodium.js": "^0.7.13",
+    "uuid": "^9.0.0",
     "zod": "^3.23.0",
     "@anti-grooming/shared": "*"
   },
