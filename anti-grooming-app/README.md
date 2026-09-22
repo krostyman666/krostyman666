@@ -31,44 +31,64 @@ anti-grooming-app/
 
 ### Requisitos Previos
 
-- Node.js 18+
-- npm o yarn
-- Xcode (para iOS)
-- Android Studio (para Android)
-- Expo CLI: `npm install -g expo-cli`
+- **Node.js 18+** - Descargar desde [nodejs.org](https://nodejs.org)
+- **npm o yarn** - Incluido con Node.js
+- **Expo CLI** - `npm install -g expo-cli`
+- **Xcode 14+** (solo para iOS)
+- **Android Studio** (solo para Android)
 
 ### Instalación
 
 ```bash
-cd anti-grooming-app
+# Clonar repo
+git clone https://github.com/tu-usuario/krostyman666.git
+cd krostyman666/anti-grooming-app
+
+# Instalar dependencias del monorepo
 npm install
+
+# (Opcional) Instalar expo-cli globalmente si no lo has hecho
+npm install -g expo-cli
 ```
 
-### Desarrollo
+### Desarrollo Local
 
-**App del hijo** (simular monitoreo):
+**Terminal 1 - App del hijo:**
 ```bash
 npm run dev:child
-# Luego presiona 'i' para iOS o 'a' para Android
+# Luego presiona:
+# 'i' para iOS simulator
+# 'a' para Android emulator
+# 'w' para web (no todas las features disponibles)
 ```
 
-**App del padre** (panel de alertas):
+**Terminal 2 - App del padre (en paralelo):**
 ```bash
 npm run dev:parent
-# Luego presiona 'i' para iOS o 'a' para Android
+# Mismo: 'i', 'a', 'w'
 ```
 
-### Build para Producción
+**Resultado esperado:**
+- App del hijo muestra un código de 6 caracteres para emparejamiento
+- App del padre lista campos para ingresar ese código
+- Puedes ver "Herramientas de Testing" en la esquina inferior derecha del hijo
+
+### Build para Producción (EAS)
 
 ```bash
+# Primero, login a tu cuenta Expo
+eas login
+
 # Android
 npm run build:child --android
 npm run build:parent --android
 
-# iOS
+# iOS (requiere Apple Developer Account)
 npm run build:child --ios
 npm run build:parent --ios
 ```
+
+**Nota:** Los builds requieren EAS CLI y cuentas configuradas en Expo.
 
 ## 🔐 Seguridad
 
@@ -161,10 +181,31 @@ const unreviewed = await LocalStorage.getUnreviewedAlerts();
 
 ## 🧪 Testing
 
+### Verificación Local
+
 ```bash
+# Type-checking
 npm run type-check
-npm run lint
+
+# Linting (cuando esté configurado)
+npm run lint -w @trato/backend
 ```
+
+### Testing Manual
+
+Consulta [TESTING.md](./TESTING.md) para:
+- Escenario completo padre-hijo
+- Casos de testing específicos
+- Performance benchmarks
+- Debugging guide
+- Troubleshooting
+
+### Simulación de Grooming
+
+En la app del hijo, usa el botón 🧪 en la esquina inferior derecha para:
+- Simular intentos de grooming predefinidos
+- Inyectar textos personalizados
+- Ver alertas generadas en tiempo real
 
 ## 📚 Documentación
 
@@ -187,14 +228,27 @@ npm run lint
 3. **Intercambio de keys**: Se comparten públicamente, se encripta privado
 4. **Emparejamiento confirmado**: Ambos dispositivos guardan la pareja localmente
 
-## 🛠️ Próximos Pasos
+## 🛠️ Próximas Prioridades
 
-- [ ] Servicio de background monitoring (iOS/Android)
-- [ ] Integración de contactos para detectar desconocidos
-- [ ] Análisis de ubicación (geofencing)
-- [ ] Detección de apps descargadas
-- [ ] Sincronización opcional a la nube (con consentimiento)
-- [ ] Panel web para padres (opcional)
+Consulta [ROADMAP.md](./ROADMAP.md) para el plan completo.
+
+### Inmediatas (0.2.0 - Próximas 2-4 semanas)
+
+- [x] Servicios de background (expo-background-fetch)
+- [x] Notificaciones interceptadas
+- [x] Integración de contactos
+- [x] Análisis de ubicación
+- [ ] Testing en dispositivos reales
+- [ ] Sincronización en tiempo real (WebSocket/BLE)
+- [ ] Performance optimization
+
+### Futuro (0.3.0+)
+
+- [ ] Machine Learning para patrones
+- [ ] Panel web para padres
+- [ ] Sincronización a nube (opcional)
+- [ ] Multiidioma
+- [ ] Multi-hijo por padre
 
 ## 📄 Licencia
 
