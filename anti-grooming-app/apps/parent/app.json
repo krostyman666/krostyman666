@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Taro Parent",
+    "slug": "taro-parent",
+    "version": "0.1.0",
+    "scheme": "taro-parent",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "platforms": ["ios", "android"],
+    "ios": {
+      "supportsTabletMode": true,
+      "bundleIdentifier": "com.taro.parent"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.taro.parent"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "server"
+    },
+    "plugins": [
+      "expo-router",
+      ["expo-notifications"]
+    ]
+  }
+}

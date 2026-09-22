@@ -1,0 +1,17 @@
+{
+  "name": "@anti-grooming/shared",
+  "version": "0.1.0",
+  "main": "./lib/index.ts",
+  "types": "./lib/index.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "libsodium.js": "^0.7.13",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.1.0"
+  }
+}

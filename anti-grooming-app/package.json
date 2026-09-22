@@ -1,0 +1,25 @@
+{
+  "name": "@anti-grooming/workspace",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/parent",
+    "apps/child",
+    "shared"
+  ],
+  "scripts": {
+    "dev:parent": "cd apps/parent && npm run start",
+    "dev:child": "cd apps/child && npm run start",
+    "build:parent": "cd apps/parent && npm run build",
+    "build:child": "cd apps/child && npm run build",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint . --ext .ts,.tsx"
+  },
+  "devDependencies": {
+    "@react-native/typescript-config": "^0.73.0",
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-native": "^0.73.0",
+    "typescript": "^5.1.0"
+  }
+}

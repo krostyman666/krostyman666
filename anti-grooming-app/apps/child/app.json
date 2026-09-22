@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "Taro",
+    "slug": "taro-child",
+    "version": "0.1.0",
+    "scheme": "taro",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "platforms": ["ios", "android"],
+    "ios": {
+      "supportsTabletMode": true,
+      "bundleIdentifier": "com.taro.child"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.taro.child"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "server"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "The app accesses your contacts to protect you from inappropriate contact."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Taro to access your location for safety."
+        }
+      ]
+    ]
+  }
+}
