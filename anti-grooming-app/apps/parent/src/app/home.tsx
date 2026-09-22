@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -7,40 +7,10 @@ import {
   ActivityIndicator,
   TouchableOpacity,
 } from 'react-native';
-import { Alert, LocalStorage } from '@anti-grooming/shared';
+import { useSyncAlerts } from '../hooks/useSyncAlerts';
 
 export default function HomeScreen() {
-  const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [unreviewedCount, setUnreviewedCount] = useState(0);
-
-  useEffect(() => {
-    loadAlerts();
-    const interval = setInterval(loadAlerts, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  async function loadAlerts() {
-    try {
-      const allAlerts = await LocalStorage.getAlerts();
-      const unreviewed = allAlerts.filter((a) => !a.reviewed);
-      setAlerts(allAlerts.sort((a, b) => b.timestamp - a.timestamp).slice(0, 20));
-      setUnreviewedCount(unreviewed.length);
-    } catch (error) {
-      console.error('Error loading alerts:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleReviewAlert(alertId: string) {
-    try {
-      await LocalStorage.markAlertAsReviewed(alertId);
-      loadAlerts();
-    } catch (error) {
-      console.error('Error reviewing alert:', error);
-    }
-  }
+  const { alerts, unreviewedCount, loading, error, markAsReviewed } = useSyncAlerts();
 
   function getSeverityColor(severity: string): string {
     switch (severity) {
@@ -91,6 +61,12 @@ export default function HomeScreen() {
         )}
       </View>
 
+      {error && (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>Error: {error}</Text>
+        </View>
+      )}
+
       {unreviewedCount === 0 && alerts.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyTitle}>Sin alertas</Text>
@@ -109,14 +85,14 @@ export default function HomeScreen() {
           )}
 
           <View style={styles.alertsList}>
-            {alerts.map((alert) => (
+            {alerts.slice(0, 20).map((alert) => (
               <TouchableOpacity
                 key={alert.id}
                 style={[
                   styles.alertCard,
                   !alert.reviewed && { backgroundColor: '#f0f8ff' },
                 ]}
-                onPress={() => handleReviewAlert(alert.id)}
+                onPress={() => markAsReviewed(alert.id)}
               >
                 <View style={styles.alertHeader}>
                   <View
@@ -205,6 +181,20 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  errorBox: {
+    backgroundColor: '#fee2e2',
+    marginHorizontal: 12,
+    marginTop: 12,
+    marginBottom: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  errorText: {
+    fontSize: 13,
+    color: '#991b1b',
+    fontWeight: '500',
   },
   emptyState: {
     flex: 1,
