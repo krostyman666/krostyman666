@@ -5,16 +5,60 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "channel": "development",
+      "env": {
+        "ENVIRONMENT": "development"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "channel": "preview",
+      "env": {
+        "ENVIRONMENT": "preview"
+      },
+      "ios": {
+        "enterpriseProvisioning": "adhoc"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "channel": "production",
+      "env": {
+        "ENVIRONMENT": "production"
+      },
+      "ios": {
+        "enterpriseProvisioning": "universal"
+      }
+    },
+    "testing": {
+      "distribution": "internal",
+      "channel": "testing",
+      "env": {
+        "ENVIRONMENT": "testing",
+        "DEBUG": "true"
+      },
+      "ios": {
+        "enterpriseProvisioning": "adhoc",
+        "simulator": false
+      },
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleDebug"
+      }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": true,
+      "android": true
+    }
+  },
+  "resourceClass": {
+    "ios": "default",
+    "android": "default"
   }
 }
