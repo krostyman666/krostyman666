@@ -1,0 +1,196 @@
+{
+  "faq": [
+    {
+      "id": "congelacion-ovulos",
+      "preguntas": [
+        "¿Hacen congelación de óvulos?",
+        "¿Se pueden congelar óvulos?",
+        "¿Vitrificación de óvulos?"
+      ],
+      "respuesta": "Sí, ofrecemos congelación de óvulos mediante vitrificación con tasa de supervivencia del 95%. Es ideal si deseas preservar tu fertilidad.",
+      "categoria": "servicios",
+      "presupuestoItem": "congelacion_ovulos"
+    },
+    {
+      "id": "cobertura-fonasa",
+      "preguntas": [
+        "¿Cubre Fonasa?",
+        "¿Tengo cobertura Fonasa?",
+        "¿Qué cubre Fonasa?"
+      ],
+      "respuesta": "Sí, Fonasa cubre hasta 3 ciclos FIV si cumplen criterios: edad < 43 años, diagnóstico de infertilidad comprobado y estar cotizando. Consulta con nuestros especialistas para más detalles.",
+      "categoria": "financiamiento"
+    },
+    {
+      "id": "fiv-basico",
+      "preguntas": [
+        "¿Qué es FIV?",
+        "¿Cómo funciona la FIV?",
+        "¿Cuánto demora un ciclo FIV?"
+      ],
+      "respuesta": "FIV (Fecundación In Vitro) es un procedimiento donde los óvulos se fertilizan en laboratorio. Un ciclo típicamente demora 10-14 días. Tenemos tasas de éxito del 45-55% según tu edad.",
+      "categoria": "servicios",
+      "presupuestoItem": "fiv"
+    },
+    {
+      "id": "inseminacion-artificial",
+      "preguntas": [
+        "¿Qué es inseminación artificial?",
+        "¿IA o inseminación?",
+        "¿Diferencia entre IA y FIV?"
+      ],
+      "respuesta": "Inseminación Artificial (IA) es un procedimiento menos invasivo que FIV. Los espermatozoides se colocan en el útero en el momento de la ovulación. Es más económica que FIV.",
+      "categoria": "servicios",
+      "presupuestoItem": "ia"
+    },
+    {
+      "id": "edad-maxima",
+      "preguntas": [
+        "¿Cuál es la edad máxima?",
+        "¿Me acepta si tengo 45 años?",
+        "¿Hay límite de edad?"
+      ],
+      "respuesta": "No hay límite estricto de edad, pero la probabilidad de éxito disminuye después de los 42 años. Cada caso es evaluado individualmente por nuestros especialistas.",
+      "categoria": "criterios"
+    },
+    {
+      "id": "pareja-mismo-sexo",
+      "preguntas": [
+        "¿Aceptan parejas del mismo sexo?",
+        "¿Soy pareja homosexual, me atienden?",
+        "¿Parejas lesbianas?"
+      ],
+      "respuesta": "Sí, ofrecemos servicios para parejas del mismo sexo. Contamos con opciones como ROPA (Receptive Oocyte Pickup and Transfer) para parejas lesbianas. Consulta con nuestro equipo.",
+      "categoria": "servicios"
+    },
+    {
+      "id": "dolor-riesgos",
+      "preguntas": [
+        "¿Duele?",
+        "¿Hay riesgos?",
+        "¿Es peligroso?"
+      ],
+      "respuesta": "Los procedimientos son mínimamente invasivos bajo anestesia. El riesgo de complicaciones es muy bajo (<1%). El síndrome de hiperestimulación ovárica es raro. Nuestro equipo médico te asesorará.",
+      "categoria": "seguridad"
+    },
+    {
+      "id": "licencia-trabajo",
+      "preguntas": [
+        "¿Pido licencia en el trabajo?",
+        "¿Cuántos días de licencia?",
+        "¿Me puedo ausentar del trabajo?"
+      ],
+      "respuesta": "La mayoría de pacientes puede continuar trabajando. Algunos procedimientos requieren 2-3 días de descanso. Coordina con nuestro equipo para un plan personalizado.",
+      "categoria": "practicas"
+    },
+    {
+      "id": "tasa-exito",
+      "preguntas": [
+        "¿Cuál es la tasa de éxito?",
+        "¿Qué probabilidad tengo?",
+        "¿Porcentaje de embarazo?"
+      ],
+      "respuesta": "Nuestras tasas de éxito varían según la edad: 50-55% a los 30-35 años, 40-45% a los 35-40 años, 25-30% a los 40-43 años. Puedes agendar consulta para análisis personalizado.",
+      "categoria": "resultados"
+    },
+    {
+      "id": "no-funciona",
+      "preguntas": [
+        "¿Si no funciona?",
+        "¿Qué pasa si falla?",
+        "¿Hay garantía?"
+      ],
+      "respuesta": "Entendemos la frustración. Ofrecemos planes de múltiples ciclos con tasas especiales. Cada ciclo aprendemos más de tu caso y ajustamos el protocolo. Consulta nuestras opciones.",
+      "categoria": "seguimiento"
+    },
+    {
+      "id": "valores-consulta",
+      "preguntas": [
+        "¿Cuánto cuesta una consulta?",
+        "¿Precio consulta inicial?",
+        "¿Valores?"
+      ],
+      "respuesta": "Consulta inicial: $150.000. Puedes agregar opcionales como batería hormonal ($80K) o ecografía ($120K). Ofrecemos financiamiento hasta 48 cuotas.",
+      "categoria": "precios",
+      "presupuestoItem": "consulta_inicial"
+    },
+    {
+      "id": "financiamiento",
+      "preguntas": [
+        "¿Puedo pagar en cuotas?",
+        "¿Opciones de financiamiento?",
+        "¿Hasta cuántas cuotas?"
+      ],
+      "respuesta": "Sí, ofrecemos financiamiento hasta 48 cuotas sin interés. También aceptamos múltiples opciones de pago. Consulta con nuestro equipo de cobranza para personalizar.",
+      "categoria": "precios"
+    },
+    {
+      "id": "donde-ubicado",
+      "preguntas": [
+        "¿Dónde está ubicado?",
+        "¿Cuál es la dirección?",
+        "¿Teléfono?"
+      ],
+      "respuesta": "Estamos ubicados en Santiago. Contáctanos al (+56) 2 2571 3601 para más información de ubicación y horarios.",
+      "categoria": "contacto"
+    }
+  ],
+  "presupuestos": {
+    "consulta_inicial": {
+      "id": "consulta_inicial",
+      "nombre": "Consulta Inicial",
+      "precioBase": 150000,
+      "opcionales": {
+        "bateria_hormonal": {
+          "nombre": "Batería Hormonal",
+          "precio": 80000
+        },
+        "ecografia": {
+          "nombre": "Ecografía",
+          "precio": 120000
+        }
+      }
+    },
+    "congelacion_ovulos": {
+      "id": "congelacion_ovulos",
+      "nombre": "Congelación de Óvulos",
+      "precioBase": 850000,
+      "opcionales": {
+        "almacenamiento_anual": {
+          "nombre": "Almacenamiento Anual",
+          "precio": 15000
+        },
+        "descongelamiento_futura": {
+          "nombre": "Descongelamiento (Futura)",
+          "precio": 150000
+        }
+      }
+    },
+    "fiv": {
+      "id": "fiv",
+      "nombre": "FIV Completo",
+      "precioBase": 1200000,
+      "opcionales": {
+        "pgd": {
+          "nombre": "Diagnóstico Genético Preimplantacional",
+          "precio": 300000
+        },
+        "icsi": {
+          "nombre": "ICSI (Inyección Intracitoplasmática)",
+          "precio": 200000
+        }
+      }
+    },
+    "ia": {
+      "id": "ia",
+      "nombre": "Inseminación Artificial",
+      "precioBase": 600000,
+      "opcionales": {
+        "preparacion_semen": {
+          "nombre": "Preparación Avanzada de Semen",
+          "precio": 150000
+        }
+      }
+    }
+  }
+}
