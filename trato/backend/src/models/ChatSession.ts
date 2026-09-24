@@ -9,6 +9,7 @@ import {
 import { sequelize } from '../config/database';
 
 export type LeadStatus = 'cold' | 'warm' | 'hot';
+export type ChannelType = 'web' | 'whatsapp';
 
 export class ChatSession extends Model<
   InferAttributes<ChatSession>,
@@ -21,6 +22,10 @@ export class ChatSession extends Model<
   declare telefono?: string | null;
   declare nombre?: string | null;
   declare rut?: string | null;
+
+  // WhatsApp
+  declare whatsappPhone?: string | null; // Número de WhatsApp del cliente
+  declare channel: CreationOptional<ChannelType>; // web o whatsapp
 
   // Conversación (JSON array de mensajes)
   declare conversacion: Array<{ role: 'user' | 'assistant'; content: string }>;
@@ -71,6 +76,14 @@ ChatSession.init(
       type: DataTypes.STRING(12),
       unique: true,
       allowNull: true,
+    },
+    whatsappPhone: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    channel: {
+      type: DataTypes.ENUM('web', 'whatsapp'),
+      defaultValue: 'web',
     },
     conversacion: {
       type: DataTypes.JSON,
