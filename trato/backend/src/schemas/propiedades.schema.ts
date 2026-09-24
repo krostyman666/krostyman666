@@ -22,6 +22,10 @@ export const crearPropiedadSchema = Joi.object({
     'string.pattern.base': 'El rol de avalúo va en formato 12345-67',
   }),
 
+  fojas: Joi.string().trim().max(20).allow('', null),
+  numeroInscripcion: Joi.string().trim().max(20).allow('', null),
+  anoInscripcion: Joi.number().integer().min(1800).max(new Date().getFullYear()).allow(null),
+
   superficieTotal: Joi.number().positive().allow(null),
   superficieConstruida: Joi.number().positive().allow(null),
   dormitorios: Joi.number().integer().min(0).max(50).allow(null),

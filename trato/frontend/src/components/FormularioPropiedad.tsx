@@ -36,6 +36,13 @@ const esquema = z.object({
     .trim()
     .optional()
     .refine((v) => !v || /^\d{1,5}-\d{1,5}$/.test(v), 'Formato: 12345-67'),
+  fojas: z.string().trim().optional(),
+  numeroInscripcion: z.string().trim().optional(),
+  anoInscripcion: z
+    .string()
+    .trim()
+    .optional()
+    .refine((v) => !v || (!Number.isNaN(Number(v)) && Number(v) >= 1800 && Number(v) <= new Date().getFullYear()), 'Año válido'),
   dormitorios: numeroOpcional,
   banos: numeroOpcional,
   superficieConstruida: numeroOpcional,
@@ -77,6 +84,9 @@ export default function FormularioPropiedad() {
         precio: Number(datos.precio),
         depto: datos.depto || null,
         rolAvaluo: datos.rolAvaluo || null,
+        fojas: datos.fojas || null,
+        numeroInscripcion: datos.numeroInscripcion || null,
+        anoInscripcion: datos.anoInscripcion ? Number(datos.anoInscripcion) : null,
         descripcion: datos.descripcion || null,
         dormitorios: aNumero(datos.dormitorios),
         banos: aNumero(datos.banos),
@@ -153,6 +163,33 @@ export default function FormularioPropiedad() {
           ancho="full"
         >
           <input {...register('rolAvaluo')} className={INPUT} placeholder="12345-67" />
+        </Campo>
+      </Seccion>
+
+      <Seccion titulo="Datos de inscripción (Conservador)">
+        <Campo
+          etiqueta="Fojas"
+          error={errors.fojas?.message}
+          ayuda="Del registro de inscripción actual. Búscalo en tu contrato de compra o en el Conservador de tu región."
+        >
+          <input {...register('fojas')} className={INPUT} placeholder="1234" />
+        </Campo>
+        <Campo
+          etiqueta="Número de inscripción"
+          error={errors.numeroInscripcion?.message}
+        >
+          <input {...register('numeroInscripcion')} className={INPUT} placeholder="567" />
+        </Campo>
+        <Campo
+          etiqueta="Año de inscripción"
+          error={errors.anoInscripcion?.message}
+        >
+          <input
+            {...register('anoInscripcion')}
+            inputMode="numeric"
+            className={INPUT}
+            placeholder={new Date().getFullYear().toString()}
+          />
         </Campo>
       </Seccion>
 
