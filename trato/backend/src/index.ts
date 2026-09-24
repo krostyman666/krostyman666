@@ -8,11 +8,21 @@ import { conectarBaseDatos, sequelize } from './config/database';
 import authRoutes from './routes/auth.routes';
 import propiedadesRoutes from './routes/propiedades.routes';
 import notariasRoutes from './routes/notarias.routes';
+import chatRoutes from './routes/chat';
+import whatsappRoutes from './routes/whatsapp.routes';
 import { manejarErrores, rutaNoEncontrada } from './middleware/manejarErrores';
 import './models/Usuario';
 import './models/Propiedad';
 import './models/Socio';
 import './models/Documento';
+// IVI Chile models
+import './models/ChatSession';
+import './models/Message';
+import './models/IviEspecialista';
+import './models/IviReserva';
+import './models/IviPago';
+import './models/IviPresupuesto';
+import './models/IviIntegracion';
 
 const app = express();
 
@@ -35,6 +45,8 @@ app.get('/api/v1', (_req, res) => {
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/propiedades', propiedadesRoutes);
 app.use('/api/v1/notarias', notariasRoutes);
+app.use('/api/v1/chat', chatRoutes);
+app.use('/api/v1/whatsapp', whatsappRoutes);
 
 app.use(rutaNoEncontrada);
 app.use(manejarErrores);

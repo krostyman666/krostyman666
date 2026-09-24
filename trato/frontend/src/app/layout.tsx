@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
+import { ChatbotWidget } from '@/components/ChatbotWidget';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -31,7 +32,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es-CL" className={inter.variable}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <ChatbotWidget />
+      </body>
     </html>
   );
 }
