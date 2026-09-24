@@ -144,5 +144,5 @@ IviPago.belongsTo(IviReserva, {
   foreignKey: 'reservaId',
 });
 
-IviPago.addIndex(['estado'], { name: 'idx_pago_estado' });
-IviPago.addIndex(['reservaId'], { name: 'idx_pago_reserva' });
+// IviPago.addIndex(['estado'], { name: 'idx_pago_estado' });
+// IviPago.addIndex(['reservaId'], { name: 'idx_pago_reserva' });

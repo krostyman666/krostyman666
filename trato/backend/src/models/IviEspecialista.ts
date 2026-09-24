@@ -84,5 +84,5 @@ IviEspecialista.init(
   }
 );
 
-IviEspecialista.addIndex(['nombre'], { name: 'idx_especialista_nombre' });
-IviEspecialista.addIndex(['activo'], { name: 'idx_especialista_activo' });
+// IviEspecialista.addIndex(['nombre'], { name: 'idx_especialista_nombre' });
+// IviEspecialista.addIndex(['activo'], { name: 'idx_especialista_activo' });

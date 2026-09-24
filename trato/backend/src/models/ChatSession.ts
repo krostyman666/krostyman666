@@ -141,6 +141,7 @@ ChatSession.init(
   }
 );
 
-ChatSession.addIndex(['email'], { name: 'idx_chat_email' });
-ChatSession.addIndex(['leadStatus'], { name: 'idx_chat_lead_status' });
-ChatSession.addIndex(['convertidoAReserva'], { name: 'idx_chat_convertido' });
+// Indices (ver migraciones para crear en DB)
+// ChatSession.addIndex(['email'], { name: 'idx_chat_email' });
+// ChatSession.addIndex(['leadStatus'], { name: 'idx_chat_lead_status' });
+// ChatSession.addIndex(['convertidoAReserva'], { name: 'idx_chat_convertido' });

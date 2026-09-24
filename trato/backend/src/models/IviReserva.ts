@@ -175,6 +175,6 @@ IviReserva.belongsTo(IviEspecialista, {
   as: 'especialista',
 });
 
-IviReserva.addIndex(['email'], { name: 'idx_reserva_email' });
-IviReserva.addIndex(['fechaCita'], { name: 'idx_reserva_fecha' });
-IviReserva.addIndex(['estadoPago'], { name: 'idx_reserva_estado_pago' });
+// IviReserva.addIndex(['email'], { name: 'idx_reserva_email' });
+// IviReserva.addIndex(['fechaCita'], { name: 'idx_reserva_fecha' });
+// IviReserva.addIndex(['estadoPago'], { name: 'idx_reserva_estado_pago' });
