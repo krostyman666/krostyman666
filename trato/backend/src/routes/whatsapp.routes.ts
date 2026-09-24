@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import twilio from 'twilio';
 import { ChatSession, Message } from '../models';
 import { chatService } from '../services/ChatService';
+import { n8nService } from '../services/N8nService';
 
 const router = Router();
 
@@ -44,6 +45,11 @@ router.post('/webhook', async (req: Request, res: Response) => {
       sessionId: session.id,
       sender: 'user',
       content: Body,
+    });
+
+    // 🔄 ENVIAR A n8n PARA AUTOMATIZACIÓN (async, no bloquea respuesta)
+    n8nService.sendMessageEvent(session.id, customerPhone, Body, 'whatsapp').catch((err) => {
+      console.error('Error enviando a n8n:', err);
     });
 
     // Generar respuesta automática del bot
@@ -187,6 +193,27 @@ router.get('/sessions/:sessionId', async (req: Request, res: Response): Promise<
   } catch (error) {
     console.error('❌ Error fetching session:', error);
     res.status(500).json({ error: 'Error fetching session' });
+  }
+});
+
+/**
+ * GET /api/v1/whatsapp/health
+ * Verificar conexión con n8n
+ */
+router.get('/health', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const n8nHealthy = await n8nService.validateWebhook();
+    const twilio = TWILIO_ACCOUNT_SID ? 'ok' : 'missing';
+
+    res.json({
+      status: 'ok',
+      twilio,
+      n8n: n8nHealthy ? 'connected' : 'disconnected',
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    console.error('❌ Error en health check:', error);
+    res.status(500).json({ error: 'Health check failed' });
   }
 });
 
