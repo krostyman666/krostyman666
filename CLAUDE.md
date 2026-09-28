@@ -675,6 +675,16 @@ npm run build -w @trato/backend && npm run build -w @trato/frontend
 
 Para cambios de UI: levantar y mirarlo en el navegador, no sólo compilar.
 
+No hay tests todavía, pero el runner está listo para cuando se escriban: jest en
+el backend (`--passWithNoTests` mientras tanto) y vitest en el frontend.
+
+```bash
+npm test -w @trato/backend                     # jest
+npm test -w @trato/backend -- ruta/al.test.ts   # un solo archivo
+npm test -w @trato/frontend                     # vitest
+npm test -w @trato/frontend -- ruta/al.test.ts
+```
+
 ## Decidido, todavía por construir
 
 Cuatro definiciones tomadas para las etapas que siguen. No volver a discutirlas
