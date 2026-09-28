@@ -69,6 +69,22 @@ export const env = {
     docusignBaseUrl: process.env.DOCUSIGN_BASE_URL ?? '',
     docusignAccountId: process.env.DOCUSIGN_ACCOUNT_ID ?? '',
   },
+
+  /**
+   * Avalúo fiscal por rol. El SII no publica API propia: hay que contratar un
+   * proveedor de terceros (BaseAPI u otro con cobertura del catastro SII) que sí
+   * la ofrezca vía REST. Mientras `proveedor` sea 'ninguno' (el default sin
+   * contratar), el informe muestra "fuente por conectar" en vez de inventar un
+   * avalúo. Tesorería no entra acá: sus contribuciones exigen ClaveÚnica o Clave
+   * Tributaria del propio contribuyente, así que no hay integración posible sin
+   * pedirle al vendedor su clave del Estado, y el certificado se sube al
+   * expediente como cualquier otro documento.
+   */
+  sii: {
+    proveedor: (process.env.SII_PROVEEDOR ?? 'ninguno') as 'ninguno' | 'baseapi',
+    baseapiUrl: process.env.BASEAPI_URL ?? 'https://api.baseapi.cl',
+    baseapiKey: process.env.BASEAPI_KEY ?? '',
+  },
 } as const;
 
 export function cuentaDeCobroConfigurada(): boolean {

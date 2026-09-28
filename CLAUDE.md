@@ -30,7 +30,7 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Cobro con tarjeta (Flow) | Pendiente — falta contratar y poner credenciales |
 | Derechos del titular: acceso, rectificación, supresión, oposición, portabilidad | Listo, probado en navegador |
 | Registro de actividades de tratamiento y plazos de conservación | Listo; la purga de lo vencido se informa, no se ejecuta sola |
-| Conexión a SII y Tesorería para avalúo y contribuciones | Pendiente |
+| Conexión a SII y Tesorería para avalúo y contribuciones | Parcial: el rol de avalúo y los datos de inscripción se capturan al publicar; el avalúo fiscal tiene el conector listo pero sin proveedor contratado; las contribuciones se resuelven con el certificado subido al expediente, no por API |
 | Bot de preguntas del comprador, con cola interna de derivaciones | Listo, probado en navegador |
 | Promesa: negociación de cláusulas entre las partes | Listo, probado en navegador |
 | Firma de la promesa por ambas partes | Listo con firma electrónica simple; FEA pendiente de proveedor |
@@ -226,14 +226,45 @@ Dos cosas más del diseño:
   mostraría datos distintos de los que el comprador usó para ofertar. Como esas
   fotos son inmutables y viven para siempre, el renderizador del frontend tiene
   que aguantar formas que ya no emitimos.
-- **Fuente sin conectar se dice, no se inventa.** El avalúo y las contribuciones
-  salen hoy con "fuente por conectar" en vez de un número plausible. El comprador
-  va a decidir una compra con esto.
+- **Fuente sin conectar se dice, no se inventa.** Mientras no haya proveedor de
+  avalúo fiscal contratado, esa sección sale con "fuente por conectar" en vez de
+  un número plausible. El comprador va a decidir una compra con esto.
 
 Los montos del catálogo son del Conservador de Santiago ($13.500 la carpeta de
 10 años) y cambian por territorio. El precio de venta es un placeholder en
 `PRECIO_INFORME_TITULOS_CLP`, como `UF_FALLBACK_CLP`: se congela en cada informe
 al pedirlo, así que cambiarlo no altera lo ya cobrado.
+
+### Avalúo fiscal y contribuciones: por qué no hay una sola integración
+
+El rol de avalúo (`Propiedad.rolAvaluo`) y los datos de inscripción (`fojas`,
+`numeroInscripcion`, `anoInscripcion`) se piden al publicar, precisamente para
+poder pedir después los certificados que dependen de ellos. Pero SII y
+Tesorería no se resuelven igual, porque no ofrecen lo mismo:
+
+- **El SII no publica API propia.** Su sitio es un formulario HTML, no un
+  endpoint documentado. `backend/src/services/sii.service.ts` sigue el mismo
+  patrón que `almacenamiento.service.ts` y la firma: un conector con driver
+  configurable (`SII_PROVEEDOR=ninguno|baseapi` en `.env`) que hoy no está
+  contratado. Mientras sea `ninguno`, `consultarAvaluoFiscal` no llama a nada y
+  retorna `null` sin lanzar, y el informe muestra "fuente por conectar" en vez
+  de inventar un avalúo. El día que se contrate un proveedor de terceros que
+  ofrezca el catastro SII por REST, sólo hay que poner la llave.
+- **Tesorería no tiene equivalente posible.** Consultar deuda de contribuciones
+  exige ClaveÚnica o Clave Tributaria del propio contribuyente: no es una API
+  que Trato pueda llamar en nombre del vendedor, porque son credenciales
+  personales ante el Estado, no algo delegable. No hay proveedor de terceros que
+  lo resuelva tampoco. La única vía correcta es que el certificado se suba al
+  expediente como cualquier otro documento (`deuda_contribuciones`, ya en el
+  catálogo con `responsable: 'plataforma'`): cuando ese documento queda
+  `conforme` (recibido, vigente y aprobado por la notaría), el informe gratis lo
+  refleja con su fecha de emisión en vez de decir "fuente por conectar". No se
+  extrae un monto de deuda: eso lo dice el propio certificado, que el comprador
+  puede revisar.
+
+Fuentes de esta investigación: [SII, servicios online](https://www.sii.cl/servicios_online/1048-.html),
+[BaseAPI, avalúo fiscal por REST](https://baseapi.cl/herramientas/avaluo-fiscal),
+[TGR, certificado de deuda de contribuciones](https://web.tesoreria.cl/certificado-deuda-contribuciones/).
 
 ## La promesa de compraventa
 

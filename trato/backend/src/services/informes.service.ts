@@ -6,6 +6,7 @@ import { Informe, type EstadoInforme } from '../models/Informe';
 import { Consentimiento } from '../models/Consentimiento';
 import { env } from '../config/env';
 import { ErrorApi } from '../utils/ErrorApi';
+import { consultarAvaluoFiscal, siiConfigurado } from './sii.service';
 import {
   APORTES_TITULOS,
   LIMITES_ANTECEDENTES,
@@ -99,18 +100,27 @@ interface SeccionEmitida {
 /**
  * Arma las secciones del nivel gratis con lo que ya tenemos en casa.
  *
- * El avalúo del SII y las contribuciones de Tesorería se consultan por rol y son
- * gratis, pero ninguno de los dos publica API: hoy salen marcados como fuente
- * pendiente en vez de inventar el dato. Preferir el hueco explícito al número
- * plausible es la única opción defendible cuando el comprador va a decidir una
- * compra con esto.
+ * El avalúo del SII y las contribuciones de Tesorería se consultan por rol y
+ * son gratis, pero ninguno de los dos publica API propia. Se resuelven
+ * distinto:
+ *
+ * - Avalúo fiscal: hay proveedores de terceros que sí ofrecen el catastro SII
+ *   por REST (ver `sii.service.ts`). Mientras no se contrate uno, se muestra
+ *   "fuente por conectar" en vez de inventar un número.
+ * - Contribuciones: Tesorería exige ClaveÚnica o Clave Tributaria del propio
+ *   contribuyente para consultar deuda, así que no hay integración posible sin
+ *   pedirle al vendedor su clave del Estado. Se resuelve con el certificado que
+ *   ya sube al expediente (`deuda_contribuciones`): si está conforme, el
+ *   informe lo refleja; si no, sigue pendiente.
  */
-function armarAntecedentes(
+async function armarAntecedentes(
   propiedad: Propiedad,
   documentos: Documento[],
   conConsentimiento: boolean,
-): SeccionEmitida[] {
+): Promise<SeccionEmitida[]> {
   const ctx = contextoDe(propiedad);
+  const avaluo = propiedad.rolAvaluo ? await consultarAvaluoFiscal(propiedad.rolAvaluo) : null;
+  const docContribuciones = documentos.find((d) => d.codigo === 'deuda_contribuciones');
 
   return seccionesDeNivel('antecedentes', ctx).map((seccion) => {
     const base = {
@@ -144,15 +154,37 @@ function armarAntecedentes(
           },
         };
 
-      case 'avaluo_fiscal':
-      case 'contribuciones':
+      case 'avaluo_fiscal': {
+        if (avaluo) return { ...base, datos: { ...avaluo } };
         return {
           ...base,
           datos: null,
-          sinDatos: propiedad.rolAvaluo
-            ? 'Fuente por conectar: se consulta por rol y es gratis, pero no publica API.'
-            : 'El vendedor todavía no informó el rol de avalúo, que es la llave de esta consulta.',
+          sinDatos: !propiedad.rolAvaluo
+            ? 'El vendedor todavía no informó el rol de avalúo, que es la llave de esta consulta.'
+            : siiConfigurado()
+              ? 'No se pudo consultar el avalúo en este momento. Reintenta más tarde.'
+              : 'Fuente por conectar: el SII no publica API propia; falta contratar un proveedor.',
         };
+      }
+
+      case 'contribuciones': {
+        if (docContribuciones?.conforme) {
+          return {
+            ...base,
+            datos: {
+              vigenciaHasta: docContribuciones.fechaEmision,
+              advertencia:
+                'Certificado subido por Trato y aprobado por la notaría. Revisa el documento para el detalle de la deuda.',
+            },
+          };
+        }
+        return {
+          ...base,
+          datos: null,
+          sinDatos:
+            'Tesorería exige la clave del Estado del propio vendedor para consultar deuda: no se puede automatizar. El certificado se está gestionando en el expediente.',
+        };
+      }
 
       case 'avance_expediente': {
         const conformes = documentos.filter((d) => d.conforme).length;
@@ -226,7 +258,7 @@ export async function emitirAntecedentes(
   const consentimiento = await consentimientoVigente(propiedadId);
   const documentos = (propiedad.get('documentos') as Documento[] | undefined) ?? [];
 
-  const secciones = armarAntecedentes(propiedad, documentos, consentimiento !== null);
+  const secciones = await armarAntecedentes(propiedad, documentos, consentimiento !== null);
 
   return Informe.create({
     propiedadId,

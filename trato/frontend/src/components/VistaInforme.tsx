@@ -32,13 +32,22 @@ const ETIQUETA_CAMPO: Record<string, string> = {
   precio: 'Precio publicado',
   moneda: 'Moneda',
   noEstimados: 'No estimamos',
+  rol: 'Rol de avalúo',
+  avaluoTotal: 'Avalúo total',
+  avaluoExento: 'Avalúo exento',
+  avaluoAfecto: 'Avalúo afecto',
+  vigencia: 'Vigencia del avalúo',
+  vigenciaHasta: 'Certificado emitido el',
 };
 
 const numero = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 });
+const fecha = new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', dateStyle: 'long' });
 
 const CAMPOS_SUPERFICIE = ['superficieConstruida', 'superficieTotal'];
 /** Los años no llevan separador de miles: 1998, no 1.998. */
 const CAMPOS_ANO = ['anoConstruccion'];
+const CAMPOS_CLP = ['avaluoTotal', 'avaluoExento', 'avaluoAfecto'];
+const CAMPOS_FECHA = ['vigenciaHasta'];
 
 const ETIQUETA_VALOR: Record<string, string> = {
   casa: 'Casa',
@@ -77,6 +86,11 @@ function Valor({ campo, valor }: { campo: string; valor: unknown }) {
     );
   }
 
+  if (CAMPOS_FECHA.includes(campo)) {
+    const d = new Date(valor as string);
+    return <>{Number.isNaN(d.getTime()) ? String(valor) : fecha.format(d)}</>;
+  }
+
   if (typeof valor === 'object') {
     return (
       <ul className="space-y-0.5">
@@ -99,6 +113,7 @@ function Valor({ campo, valor }: { campo: string; valor: unknown }) {
     if (campo === 'avance') return <>{Math.round(comoNumero * 100)}%</>;
     if (CAMPOS_ANO.includes(campo)) return <>{comoNumero}</>;
     if (CAMPOS_SUPERFICIE.includes(campo)) return <>{numero.format(comoNumero)} m²</>;
+    if (CAMPOS_CLP.includes(campo)) return <>${numero.format(comoNumero)}</>;
     return <>{numero.format(comoNumero)}</>;
   }
 
