@@ -68,12 +68,20 @@ export default function PanelUsuario() {
             </Link>
           )}
           {(usuario.rol === 'asesor' || usuario.rol === 'admin') && (
-            <Link
-              href="/preguntas"
-              className="rounded-lg px-3 py-2 text-sm font-medium text-tinta-suave transition hover:bg-tinta/5 hover:text-tinta"
-            >
-              Preguntas del bot
-            </Link>
+            <>
+              <Link
+                href="/preguntas"
+                className="rounded-lg px-3 py-2 text-sm font-medium text-tinta-suave transition hover:bg-tinta/5 hover:text-tinta"
+              >
+                Preguntas del bot
+              </Link>
+              <Link
+                href="/datos-externos"
+                className="rounded-lg px-3 py-2 text-sm font-medium text-tinta-suave transition hover:bg-tinta/5 hover:text-tinta"
+              >
+                Avalúo y contribuciones
+              </Link>
+            </>
           )}
           {usuario.rol === 'admin' && (
             <>

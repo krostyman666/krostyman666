@@ -30,7 +30,7 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Cobro con tarjeta (Flow) | Pendiente — falta contratar y poner credenciales |
 | Derechos del titular: acceso, rectificación, supresión, oposición, portabilidad | Listo, probado en navegador |
 | Registro de actividades de tratamiento y plazos de conservación | Listo; la purga de lo vencido se informa, no se ejecuta sola |
-| Conexión a SII y Tesorería para avalúo y contribuciones | Listo el conector y el nodo de n8n para poblar la caché; falta terminar de armar el flujo (consultar los portales por rol) y correrlo por primera vez |
+| Conexión a SII y Tesorería para avalúo y contribuciones | Listo el conector, el nodo de n8n y la carga manual (`/datos-externos`) para cuando el flujo no pueda; falta terminar de armar el flujo (consultar los portales por rol) y correrlo por primera vez |
 | Bot de preguntas del comprador, con cola interna de derivaciones | Listo, probado en navegador |
 | Promesa: negociación de cláusulas entre las partes | Listo, probado en navegador |
 | Firma de la promesa por ambas partes | Listo con firma electrónica simple; FEA pendiente de proveedor |
@@ -286,6 +286,24 @@ documentada, pero ambos son consultables por cualquiera, no sólo por el dueño.
   real del portal del SII porque tiene protección anti-bot (queue-it) que
   bloquea navegadores automatizados, y insistir con reintentos es justo lo
   que la siguiente advertencia dice no hacer.
+- **Cuando el flujo no puede, alguien del equipo puede.** `/datos-externos`
+  (rol admin o asesor) muestra la misma cola de pendientes y deja llenar el
+  avalúo fiscal o las cuotas de contribuciones a mano, propiedad por
+  propiedad. Llama a los mismos `guardarAvaluoFiscal` / `guardarContribuciones`
+  que usa n8n, autenticado con el JWT normal en vez de la llave de
+  integración, y queda `fuente: 'manual'` en la caché para trazabilidad. Es el
+  colchón mientras el flujo de scraping no esté armado o un portal bloquee la
+  consulta esa semana -- no hay que esperar a que n8n funcione para tener el
+  dato en el informe.
+
+**¿Existe alguna API oficial de SII o Tesorería?** No. Ninguna de las dos
+publica una API documentada para avalúo fiscal ni contribuciones por rol. Lo
+único con API real es BaseAPI.cl (de pago, con SDK en TypeScript), que además
+de avalúo fiscal también cubre Tesorería
+(`api.baseapi.cl/v1/tgr/cartola` -- cartola fiscal y certificado de deuda).
+Si en algún momento conviene pagar por confiabilidad en vez de depender del
+scraping, ese es el proveedor a evaluar primero para ambos, no sólo para el
+avalúo.
 
 **Advertencia que sigue vigente:** aun siendo público, es scraping de un
 portal del Estado. Identificarse honestamente, no golpear sus servidores, y
@@ -619,6 +637,7 @@ GET   /api/v1/auth/perfil     Bearer                     → { usuario }
 
 GET   /api/v1/propiedades                    ?comuna&tipo&moneda&precioMin&precioMax&dormitoriosMin&pagina
 GET   /api/v1/propiedades/mias               Bearer
+GET   /api/v1/propiedades/pendientes-datos-externos   Bearer, rol admin|asesor  ?tipo=avaluo_fiscal|contribuciones
 POST  /api/v1/propiedades                    Bearer
 GET   /api/v1/propiedades/:id                ficha pública; completa si eres el dueño
 PATCH /api/v1/propiedades/:id                Bearer (solo el dueño)
@@ -628,6 +647,8 @@ PATCH /api/v1/propiedades/documentos/:docId  Bearer (solo el dueño)
 POST  /api/v1/propiedades/documentos/:docId/archivo  Bearer (dueño) ?fechaEmision= · cuerpo = archivo crudo
 GET   /api/v1/propiedades/documentos/:docId/archivo  Bearer (dueño, su notaría o interno)
 PATCH /api/v1/propiedades/:id/notaria        Bearer (solo el dueño)
+PATCH /api/v1/propiedades/:id/avaluo-fiscal  Bearer, rol admin|asesor  { avaluoTotal, avaluoExento, avaluoAfecto, vigencia } -- carga manual
+PATCH /api/v1/propiedades/:id/contribuciones Bearer, rol admin|asesor  { cuotas[], totalAdeudadoClp, alDia } -- carga manual
 GET   /api/v1/propiedades/:id/listo-para-escriturar   Bearer
 GET   /api/v1/propiedades/catalogo-documentos
 

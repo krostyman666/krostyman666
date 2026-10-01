@@ -56,10 +56,23 @@ async function propiedadConRol(propiedadId: string): Promise<Propiedad> {
   return propiedad;
 }
 
-/** Propiedades con rol pero sin dato fresco: la cola de trabajo de n8n. */
+export interface PropiedadPendiente {
+  id: string;
+  rolAvaluo: string;
+  titulo: string;
+  comuna: string;
+}
+
+/**
+ * Propiedades con rol pero sin dato fresco: la cola de trabajo, tanto de n8n
+ * como de quien la llene a mano cuando el flujo automático no pueda (bloqueo
+ * anti-bot, portal caído, lo que sea). Trae título y comuna -- a n8n le sirven
+ * poco, pero a una persona mirando la lista sí le hacen falta para saber cuál
+ * propiedad es cuál.
+ */
 export async function propiedadesPendientes(
   tipo: 'avaluo_fiscal' | 'contribuciones',
-): Promise<{ id: string; rolAvaluo: string }[]> {
+): Promise<PropiedadPendiente[]> {
   const campo = tipo === 'avaluo_fiscal' ? 'avaluoFiscalCache' : 'contribucionesCache';
   const vigenciaDias = tipo === 'avaluo_fiscal' ? AVALUO_FISCAL_VIGENCIA_DIAS : CONTRIBUCIONES_VIGENCIA_DIAS;
 
@@ -68,21 +81,28 @@ export async function propiedadesPendientes(
       rolAvaluo: { [Op.ne]: null },
       estado: { [Op.in]: ['publicada', 'reservada'] },
     },
-    attributes: ['id', 'rolAvaluo', campo],
+    attributes: ['id', 'rolAvaluo', 'titulo', 'comuna', campo],
   });
 
   return propiedades
     .filter((p) => !tieneCacheFresca(p.get(campo) as Record<string, unknown> | null, vigenciaDias))
-    .map((p) => ({ id: p.id, rolAvaluo: p.rolAvaluo as string }));
+    .map((p) => ({ id: p.id, rolAvaluo: p.rolAvaluo as string, titulo: p.titulo, comuna: p.comuna }));
 }
 
+/**
+ * `fuente` distingue quién llenó el dato: 'n8n' cuando lo empuja el flujo
+ * automático, 'manual' cuando lo escribió alguien del equipo porque el portal
+ * bloqueó la consulta automática. El informe no distingue -- a ambos los
+ * muestra con su fecha -- pero queda la trazabilidad de cómo se obtuvo.
+ */
 export async function guardarAvaluoFiscal(
   propiedadId: string,
   datos: AvaluoFiscalDatos,
+  fuente: 'n8n' | 'manual' = 'n8n',
 ): Promise<Propiedad> {
   const propiedad = await propiedadConRol(propiedadId);
   await propiedad.update({
-    avaluoFiscalCache: { ...datos, fuente: 'n8n', consultadoEn: new Date().toISOString() },
+    avaluoFiscalCache: { ...datos, fuente, consultadoEn: new Date().toISOString() },
   });
   return propiedad;
 }
@@ -90,10 +110,11 @@ export async function guardarAvaluoFiscal(
 export async function guardarContribuciones(
   propiedadId: string,
   datos: ContribucionesDatos,
+  fuente: 'n8n' | 'manual' = 'n8n',
 ): Promise<Propiedad> {
   const propiedad = await propiedadConRol(propiedadId);
   await propiedad.update({
-    contribucionesCache: { ...datos, fuente: 'n8n', consultadoEn: new Date().toISOString() },
+    contribucionesCache: { ...datos, fuente, consultadoEn: new Date().toISOString() },
   });
   return propiedad;
 }

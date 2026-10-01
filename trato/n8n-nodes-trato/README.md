@@ -51,6 +51,12 @@ le envíes (30 días para contribuciones, 180 para avalúo fiscal; ver
 `backend/src/services/integraciones.service.ts`), así que no hace falta
 volver a consultar antes de que venza.
 
+**Mientras este flujo no esté terminado (o cuando un portal bloquee una
+consulta puntual), no hace falta esperar:** `/datos-externos` en el panel
+interno (rol admin o asesor) deja llenar el avalúo fiscal o las contribuciones
+a mano, propiedad por propiedad, usando los mismos campos que este nodo
+mandaría. Queda registrado con `fuente: 'manual'` en vez de `'n8n'`.
+
 ## Instalación local
 
 ```bash

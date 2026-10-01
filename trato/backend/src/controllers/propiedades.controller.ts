@@ -1,6 +1,7 @@
 import type { RequestHandler } from 'express';
 import * as servicio from '../services/propiedades.service';
 import * as documentos from '../services/documentos.service';
+import * as integraciones from '../services/integraciones.service';
 import { ErrorApi } from '../utils/ErrorApi';
 import type { Moneda, TipoPropiedad } from '../models/Propiedad';
 
@@ -150,4 +151,38 @@ export const descargarArchivoDocumento: RequestHandler = async (req, res, next) 
 
 export const catalogo: RequestHandler = (_req, res) => {
   res.json({ documentos: documentos.catalogoPublico() });
+};
+
+/**
+ * Carga manual de avalúo fiscal y contribuciones, para cuando el flujo
+ * automático (n8n) no puede consultarlas -- el portal las bloqueó, el flujo
+ * todavía no corre, lo que sea. Mismo servicio que usa n8n, autenticado por
+ * JWT de equipo interno en vez de llave de integración.
+ */
+export const pendientesDatosExternos: RequestHandler = async (req, res, next) => {
+  try {
+    const tipo = req.query.tipo === 'contribuciones' ? 'contribuciones' : 'avaluo_fiscal';
+    const propiedades = await integraciones.propiedadesPendientes(tipo);
+    res.json({ propiedades });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const guardarAvaluoFiscalManual: RequestHandler = async (req, res, next) => {
+  try {
+    const propiedad = await integraciones.guardarAvaluoFiscal(req.params.id, req.body, 'manual');
+    res.json({ propiedad: { id: propiedad.id, avaluoFiscalCache: propiedad.avaluoFiscalCache } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const guardarContribucionesManual: RequestHandler = async (req, res, next) => {
+  try {
+    const propiedad = await integraciones.guardarContribuciones(req.params.id, req.body, 'manual');
+    res.json({ propiedad: { id: propiedad.id, contribucionesCache: propiedad.contribucionesCache } });
+  } catch (error) {
+    next(error);
+  }
 };

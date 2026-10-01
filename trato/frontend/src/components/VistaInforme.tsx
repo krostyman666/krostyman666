@@ -69,6 +69,7 @@ const ETIQUETA_VALOR: Record<string, string> = {
   uf: 'UF',
   clp: 'Pesos',
   n8n: 'Consulta automática',
+  manual: 'Cargado por el equipo',
   pagada: 'Pagada',
   pendiente: 'Pendiente',
   atrasada: 'Atrasada',

@@ -4,7 +4,7 @@ import * as controlador from '../controllers/propiedades.controller';
 import * as notarias from '../controllers/notarias.controller';
 import * as visitas from '../controllers/visitas.controller';
 import * as informes from '../controllers/informes.controller';
-import { autenticar, autenticarOpcional } from '../middleware/autenticar';
+import { autenticar, autenticarOpcional, exigirRol } from '../middleware/autenticar';
 import { validarCuerpo } from '../middleware/validar';
 import {
   actualizarDocumentoSchema,
@@ -13,6 +13,7 @@ import {
   crearPropiedadSchema,
 } from '../schemas/propiedades.schema';
 import { disponibilidadSchema, solicitarVisitaSchema } from '../schemas/visitas.schema';
+import { avaluoFiscalSchema, contribucionesSchema } from '../schemas/integraciones.schema';
 
 const asignarNotariaSchema = Joi.object({
   notariaId: Joi.string().uuid().required(),
@@ -24,6 +25,16 @@ router.get('/catalogo-documentos', controlador.catalogo);
 router.get('/', controlador.buscar);
 router.get('/mias', autenticar, controlador.mias);
 router.post('/', autenticar, validarCuerpo(crearPropiedadSchema), controlador.crear);
+
+// Carga manual de avalúo fiscal y contribuciones, para cuando n8n no puede
+// consultarlas (portal bloqueado, flujo sin correr todavía). Antes de `/:id`
+// para que no lo capture como un id.
+router.get(
+  '/pendientes-datos-externos',
+  autenticar,
+  exigirRol('admin', 'asesor'),
+  controlador.pendientesDatosExternos,
+);
 
 router.get('/:id', autenticarOpcional, controlador.obtener);
 router.patch('/:id', autenticar, validarCuerpo(actualizarPropiedadSchema), controlador.actualizar);
@@ -67,6 +78,20 @@ router.patch(
   autenticar,
   validarCuerpo(asignarNotariaSchema),
   notarias.asignarNotaria,
+);
+router.patch(
+  '/:id/avaluo-fiscal',
+  autenticar,
+  exigirRol('admin', 'asesor'),
+  validarCuerpo(avaluoFiscalSchema),
+  controlador.guardarAvaluoFiscalManual,
+);
+router.patch(
+  '/:id/contribuciones',
+  autenticar,
+  exigirRol('admin', 'asesor'),
+  validarCuerpo(contribucionesSchema),
+  controlador.guardarContribucionesManual,
 );
 router.patch(
   '/documentos/:documentoId',
