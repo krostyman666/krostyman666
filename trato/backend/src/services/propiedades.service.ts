@@ -113,6 +113,8 @@ export async function obtenerPublica(id: string): Promise<Propiedad> {
         'numeroInscripcion',
         'anoInscripcion',
         'rolAvaluo',
+        'avaluoFiscalCache',
+        'contribucionesCache',
         // Identificadores internos que no le sirven a quien mira la ficha.
         'vendedorId',
         'notariaId',

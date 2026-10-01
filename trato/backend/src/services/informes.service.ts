@@ -8,6 +8,11 @@ import { env } from '../config/env';
 import { ErrorApi } from '../utils/ErrorApi';
 import { consultarAvaluoFiscal, siiConfigurado } from './sii.service';
 import {
+  AVALUO_FISCAL_VIGENCIA_DIAS,
+  CONTRIBUCIONES_VIGENCIA_DIAS,
+  tieneCacheFresca,
+} from './integraciones.service';
+import {
   APORTES_TITULOS,
   LIMITES_ANTECEDENTES,
   PLAZO_TITULOS_HABILES,
@@ -101,17 +106,15 @@ interface SeccionEmitida {
  * Arma las secciones del nivel gratis con lo que ya tenemos en casa.
  *
  * El avalúo del SII y las contribuciones de Tesorería se consultan por rol y
- * son gratis, pero ninguno de los dos publica API propia. Se resuelven
- * distinto:
- *
- * - Avalúo fiscal: hay proveedores de terceros que sí ofrecen el catastro SII
- *   por REST (ver `sii.service.ts`). Mientras no se contrate uno, se muestra
- *   "fuente por conectar" en vez de inventar un número.
- * - Contribuciones: Tesorería exige ClaveÚnica o Clave Tributaria del propio
- *   contribuyente para consultar deuda, así que no hay integración posible sin
- *   pedirle al vendedor su clave del Estado. Se resuelve con el certificado que
- *   ya sube al expediente (`deuda_contribuciones`): si está conforme, el
- *   informe lo refleja; si no, sigue pendiente.
+ * son gratis y públicas -- ninguna de las dos exige la clave personal del
+ * vendedor, a diferencia de la consulta de deuda tributaria general. Ninguna
+ * publica API propia, así que ambas se resuelven igual: un flujo externo (n8n)
+ * consulta el portal público por rol y empuja el resultado a
+ * `Propiedad.avaluoFiscalCache` / `contribucionesCache` (ver
+ * `integraciones.service.ts`). El informe lee esa caché primero; si está
+ * vacía o vieja, cae a `consultarAvaluoFiscal` (un proveedor pagado, si se
+ * contrató uno) para el avalúo, y al certificado del expediente para
+ * contribuciones, antes de decir "fuente por conectar".
  */
 async function armarAntecedentes(
   propiedad: Propiedad,
@@ -119,7 +122,20 @@ async function armarAntecedentes(
   conConsentimiento: boolean,
 ): Promise<SeccionEmitida[]> {
   const ctx = contextoDe(propiedad);
-  const avaluo = propiedad.rolAvaluo ? await consultarAvaluoFiscal(propiedad.rolAvaluo) : null;
+  const avaluoCacheFresco = tieneCacheFresca(propiedad.avaluoFiscalCache, AVALUO_FISCAL_VIGENCIA_DIAS)
+    ? propiedad.avaluoFiscalCache
+    : null;
+  const avaluo = avaluoCacheFresco
+    ? null
+    : propiedad.rolAvaluo
+      ? await consultarAvaluoFiscal(propiedad.rolAvaluo)
+      : null;
+  const contribucionesCacheFresca = tieneCacheFresca(
+    propiedad.contribucionesCache,
+    CONTRIBUCIONES_VIGENCIA_DIAS,
+  )
+    ? propiedad.contribucionesCache
+    : null;
   const docContribuciones = documentos.find((d) => d.codigo === 'deuda_contribuciones');
 
   return seccionesDeNivel('antecedentes', ctx).map((seccion) => {
@@ -155,6 +171,7 @@ async function armarAntecedentes(
         };
 
       case 'avaluo_fiscal': {
+        if (avaluoCacheFresco) return { ...base, datos: { ...avaluoCacheFresco } };
         if (avaluo) return { ...base, datos: { ...avaluo } };
         return {
           ...base,
@@ -163,11 +180,12 @@ async function armarAntecedentes(
             ? 'El vendedor todavía no informó el rol de avalúo, que es la llave de esta consulta.'
             : siiConfigurado()
               ? 'No se pudo consultar el avalúo en este momento. Reintenta más tarde.'
-              : 'Fuente por conectar: el SII no publica API propia; falta contratar un proveedor.',
+              : 'Fuente por conectar: el flujo automático todavía no consultó esta propiedad.',
         };
       }
 
       case 'contribuciones': {
+        if (contribucionesCacheFresca) return { ...base, datos: { ...contribucionesCacheFresca } };
         if (docContribuciones?.conforme) {
           return {
             ...base,
@@ -181,8 +199,9 @@ async function armarAntecedentes(
         return {
           ...base,
           datos: null,
-          sinDatos:
-            'Tesorería exige la clave del Estado del propio vendedor para consultar deuda: no se puede automatizar. El certificado se está gestionando en el expediente.',
+          sinDatos: !propiedad.rolAvaluo
+            ? 'El vendedor todavía no informó el rol de avalúo, que es la llave de esta consulta.'
+            : 'Fuente por conectar: el flujo automático todavía no consultó esta propiedad.',
         };
       }
 

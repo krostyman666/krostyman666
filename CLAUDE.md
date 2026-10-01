@@ -30,7 +30,7 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Cobro con tarjeta (Flow) | Pendiente — falta contratar y poner credenciales |
 | Derechos del titular: acceso, rectificación, supresión, oposición, portabilidad | Listo, probado en navegador |
 | Registro de actividades de tratamiento y plazos de conservación | Listo; la purga de lo vencido se informa, no se ejecuta sola |
-| Conexión a SII y Tesorería para avalúo y contribuciones | Parcial: el rol de avalúo y los datos de inscripción se capturan al publicar; el avalúo fiscal tiene el conector listo pero sin proveedor contratado; las contribuciones se resuelven con el certificado subido al expediente, no por API |
+| Conexión a SII y Tesorería para avalúo y contribuciones | Listo el conector y el nodo de n8n para poblar la caché; falta terminar de armar el flujo (consultar los portales por rol) y correrlo por primera vez |
 | Bot de preguntas del comprador, con cola interna de derivaciones | Listo, probado en navegador |
 | Promesa: negociación de cláusulas entre las partes | Listo, probado en navegador |
 | Firma de la promesa por ambas partes | Listo con firma electrónica simple; FEA pendiente de proveedor |
@@ -42,9 +42,10 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 
 ```
 trato/
-├── backend/    API REST — Express 4 + Sequelize 6 + PostgreSQL
-├── frontend/   Next.js 16 (App Router) + React 19 + Tailwind 3
-├── shared/     vacío; se cablea cuando haya un 2º módulo compartido
+├── backend/           API REST — Express 4 + Sequelize 6 + PostgreSQL
+├── frontend/          Next.js 16 (App Router) + React 19 + Tailwind 3
+├── n8n-nodes-trato/   Nodo custom de n8n; paquete propio, fuera de los workspaces de npm
+├── shared/            vacío; se cablea cuando haya un 2º módulo compartido
 ├── infrastructure/
 └── docker-compose.yml   Postgres 15 + Redis 7
 ```
@@ -235,36 +236,73 @@ Los montos del catálogo son del Conservador de Santiago ($13.500 la carpeta de
 `PRECIO_INFORME_TITULOS_CLP`, como `UF_FALLBACK_CLP`: se congela en cada informe
 al pedirlo, así que cambiarlo no altera lo ya cobrado.
 
-### Avalúo fiscal y contribuciones: por qué no hay una sola integración
+### Avalúo fiscal y contribuciones: consulta pública por rol, vía n8n
 
 El rol de avalúo (`Propiedad.rolAvaluo`) y los datos de inscripción (`fojas`,
 `numeroInscripcion`, `anoInscripcion`) se piden al publicar, precisamente para
-poder pedir después los certificados que dependen de ellos. Pero SII y
-Tesorería no se resuelven igual, porque no ofrecen lo mismo:
+poder pedir después los certificados que dependen de ellos.
 
-- **El SII no publica API propia.** Su sitio es un formulario HTML, no un
-  endpoint documentado. `backend/src/services/sii.service.ts` sigue el mismo
-  patrón que `almacenamiento.service.ts` y la firma: un conector con driver
-  configurable (`SII_PROVEEDOR=ninguno|baseapi` en `.env`) que hoy no está
-  contratado. Mientras sea `ninguno`, `consultarAvaluoFiscal` no llama a nada y
-  retorna `null` sin lanzar, y el informe muestra "fuente por conectar" en vez
-  de inventar un avalúo. El día que se contrate un proveedor de terceros que
-  ofrezca el catastro SII por REST, sólo hay que poner la llave.
-- **Tesorería no tiene equivalente posible.** Consultar deuda de contribuciones
-  exige ClaveÚnica o Clave Tributaria del propio contribuyente: no es una API
-  que Trato pueda llamar en nombre del vendedor, porque son credenciales
-  personales ante el Estado, no algo delegable. No hay proveedor de terceros que
-  lo resuelva tampoco. La única vía correcta es que el certificado se suba al
-  expediente como cualquier otro documento (`deuda_contribuciones`, ya en el
-  catálogo con `responsable: 'plataforma'`): cuando ese documento queda
-  `conforme` (recibido, vigente y aprobado por la notaría), el informe gratis lo
-  refleja con su fecha de emisión en vez de decir "fuente por conectar". No se
-  extrae un monto de deuda: eso lo dice el propio certificado, que el comprador
-  puede revisar.
+**Corrección a una conclusión anterior:** este documento decía que Tesorería
+exigía ClaveÚnica del contribuyente y por tanto no era automatizable. Es
+incorrecto, y conviene dejarlo escrito para no repetir el error: eso aplica a
+la "Consulta de deudas" general de un contribuyente sobre sí mismo, pero
+**pagar o consultar contribuciones por rol es público** -- es exactamente como
+pagar una cuenta de servicios ajena: cualquiera que tenga el rol puede ver las
+cuotas vigentes y atrasadas en `tesoreria.cl`, sin loguearse. Confirmado
+consultando directamente ese flujo. El avalúo fiscal por rol en `sii.cl`
+también es público y tampoco exige clave. Ninguno de los dos publica una API
+documentada, pero ambos son consultables por cualquiera, no sólo por el dueño.
+
+**La arquitectura, en capas:**
+
+- `Propiedad.avaluoFiscalCache` / `Propiedad.contribucionesCache` (JSONB):
+  lo último que se consultó, con `fuente` y `consultadoEn`. `null` hasta que
+  alguien lo puebla.
+- `backend/src/services/integraciones.service.ts`: lee y escribe esa caché, y
+  arma la cola de trabajo (`propiedadesPendientes`) -- propiedades con rol pero
+  sin dato fresco. Vigencia: 180 días para avalúo fiscal (semestral), 30 para
+  contribuciones (trimestral).
+- `/api/v1/integraciones/*`: las rutas que alguien externo llama para
+  consultar la cola y empujar resultados. Autenticadas con una llave fija
+  (`INTEGRACION_API_KEY`, header `x-integracion-key`), no con un JWT de
+  usuario -- quien llama es un sistema, no una persona de la operación, y una
+  llave que se revoca cambiando una variable es más simple y más segura que un
+  JWT de 7 días rotando en un flujo externo. Ver
+  `backend/src/middleware/autenticarIntegracion.ts`.
+- `informes.service.ts` lee la caché primero; si está vacía o vieja, el avalúo
+  cae a `sii.service.ts` (un proveedor pagado tipo BaseAPI, si se contrató
+  uno) y las contribuciones caen al certificado del expediente
+  (`deuda_contribuciones`) si está `conforme`. Sólo si nada de eso hay, se
+  muestra "fuente por conectar".
+- **Quién puebla la caché**: `n8n-nodes-trato/`, un paquete de nodo custom de
+  n8n (carpeta propia en la raíz del monorepo, no parte de los workspaces de
+  npm). El nodo "Trato" sabe leer la cola y escribir el resultado; **no sabe
+  consultar SII ni Tesorería** -- eso lo arma el flujo mismo con nodos HTTP (o
+  de automatización de navegador, si la página necesita JavaScript), porque
+  scrapear un portal público es trabajo de automatización que cambia con el
+  HTML del portal, y mezclarlo con el nodo que habla con Trato acopla dos
+  cosas que cambian por razones distintas. El README del paquete trae el
+  flujo sugerido y lo que falta configurar: no se pudo capturar la llamada
+  real del portal del SII porque tiene protección anti-bot (queue-it) que
+  bloquea navegadores automatizados, y insistir con reintentos es justo lo
+  que la siguiente advertencia dice no hacer.
+
+**Advertencia que sigue vigente:** aun siendo público, es scraping de un
+portal del Estado. Identificarse honestamente, no golpear sus servidores, y
+cachear con ganas -- que es exactamente lo que la vigencia de 30/180 días
+fuerza a hacer. Un servicio del Estado que bloquea por abuso deja a Trato sin
+esta fuente, y pesa si más adelante se quiere firmar un convenio formal.
+
+**Las contribuciones por rol NO reemplazan el certificado del expediente para
+escriturar.** La notaría sigue exigiendo y aprobando el documento formal
+(`deuda_contribuciones`) antes de la escritura; lo que la caché aporta es el
+adelanto informativo que el comprador ve en el informe gratis, antes de
+ofertar.
 
 Fuentes de esta investigación: [SII, servicios online](https://www.sii.cl/servicios_online/1048-.html),
 [BaseAPI, avalúo fiscal por REST](https://baseapi.cl/herramientas/avaluo-fiscal),
-[TGR, certificado de deuda de contribuciones](https://web.tesoreria.cl/certificado-deuda-contribuciones/).
+[TGR, certificado de deuda de contribuciones](https://web.tesoreria.cl/certificado-deuda-contribuciones/),
+[Pagar contribuciones por rol](https://www.chileatiende.gob.cl/fichas/12176-pago-de-contribuciones-de-bienes-raices-en-la-tesoreria).
 
 ## La promesa de compraventa
 
@@ -658,6 +696,10 @@ PATCH /api/v1/visitas/:id/resultado          Bearer, rol asesor   { estado }
 GET   /api/v1/notarias                       ?tipo=notaria|conservador&comuna
 GET   /api/v1/notarias/bandeja               Bearer, rol notaria
 PATCH /api/v1/notarias/documentos/:docId/validacion   Bearer, rol notaria
+
+GET   /api/v1/integraciones/propiedades-pendientes          x-integracion-key  ?tipo=avaluo_fiscal|contribuciones
+PATCH /api/v1/integraciones/propiedades/:id/avaluo-fiscal   x-integracion-key  { avaluoTotal, avaluoExento, avaluoAfecto, vigencia }
+PATCH /api/v1/integraciones/propiedades/:id/contribuciones  x-integracion-key  { cuotas[], totalAdeudadoClp, alDia }
 ```
 
 Datos de prueba de notarías: `npx ts-node --transpile-only src/scripts/seed-socios.ts`

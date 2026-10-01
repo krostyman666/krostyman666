@@ -80,6 +80,22 @@ export class Propiedad extends Model<
   /** Rol de avalúo del SII (formato "12345-67"). Llave para avalúo y contribuciones. */
   declare rolAvaluo: string | null;
 
+  /**
+   * Resultado de consultar el avalúo fiscal por rol, cacheado por quien lo
+   * obtuvo (hoy, un flujo externo vía n8n que automatiza la consulta pública).
+   * null hasta que alguien lo consulte; el informe muestra "fuente por
+   * conectar" mientras tanto. Ver dominio: avaluo fiscal y contribuciones.
+   */
+  declare avaluoFiscalCache: CreationOptional<Record<string, unknown> | null>;
+
+  /**
+   * Resultado de consultar contribuciones por rol en tesoreria.cl, también
+   * pública y también cacheada. A diferencia del avalúo, esto NO reemplaza el
+   * certificado del expediente para efectos de escriturar: es el adelanto
+   * informativo que el comprador ve antes de ofertar.
+   */
+  declare contribucionesCache: CreationOptional<Record<string, unknown> | null>;
+
   declare superficieTotal: number | null;
   declare superficieConstruida: number | null;
   declare dormitorios: number | null;
@@ -151,6 +167,9 @@ Propiedad.init(
       allowNull: true,
       validate: { is: /^\d{1,5}-\d{1,5}$/i },
     },
+
+    avaluoFiscalCache: { type: DataTypes.JSONB, allowNull: true, defaultValue: null },
+    contribucionesCache: { type: DataTypes.JSONB, allowNull: true, defaultValue: null },
 
     superficieTotal: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
     superficieConstruida: { type: DataTypes.DECIMAL(10, 2), allowNull: true },

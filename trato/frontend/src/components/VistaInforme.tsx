@@ -38,6 +38,15 @@ const ETIQUETA_CAMPO: Record<string, string> = {
   avaluoAfecto: 'Avalúo afecto',
   vigencia: 'Vigencia del avalúo',
   vigenciaHasta: 'Certificado emitido el',
+  fuente: 'Origen del dato',
+  consultadoEn: 'Consultado el',
+  cuotas: 'Cuotas',
+  totalAdeudadoClp: 'Total adeudado',
+  alDia: '¿Contribuciones al día?',
+  periodo: 'Período',
+  monto: 'Monto',
+  vencimiento: 'Vencimiento',
+  estado: 'Estado',
 };
 
 const numero = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 });
@@ -46,8 +55,8 @@ const fecha = new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', d
 const CAMPOS_SUPERFICIE = ['superficieConstruida', 'superficieTotal'];
 /** Los años no llevan separador de miles: 1998, no 1.998. */
 const CAMPOS_ANO = ['anoConstruccion'];
-const CAMPOS_CLP = ['avaluoTotal', 'avaluoExento', 'avaluoAfecto'];
-const CAMPOS_FECHA = ['vigenciaHasta'];
+const CAMPOS_CLP = ['avaluoTotal', 'avaluoExento', 'avaluoAfecto', 'totalAdeudadoClp', 'monto'];
+const CAMPOS_FECHA = ['vigenciaHasta', 'consultadoEn', 'vencimiento'];
 
 const ETIQUETA_VALOR: Record<string, string> = {
   casa: 'Casa',
@@ -59,6 +68,10 @@ const ETIQUETA_VALOR: Record<string, string> = {
   parcela: 'Parcela',
   uf: 'UF',
   clp: 'Pesos',
+  n8n: 'Consulta automática',
+  pagada: 'Pagada',
+  pendiente: 'Pendiente',
+  atrasada: 'Atrasada',
 };
 
 /**
@@ -78,10 +91,16 @@ function Valor({ campo, valor }: { campo: string; valor: unknown }) {
 
   if (Array.isArray(valor)) {
     return (
-      <ul className="space-y-0.5">
-        {valor.map((v) => (
-          <li key={String(v)}>{String(v)}</li>
-        ))}
+      <ul className="space-y-1.5">
+        {valor.map((v, i) =>
+          typeof v === 'object' && v !== null ? (
+            <li key={i} className="rounded-lg border border-tinta/10 p-2.5">
+              <Valor campo={campo} valor={v} />
+            </li>
+          ) : (
+            <li key={i}>{String(v)}</li>
+          ),
+        )}
       </ul>
     );
   }

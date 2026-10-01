@@ -15,6 +15,7 @@ import datosPersonalesRoutes from './routes/datos-personales.routes';
 import pagosRoutes from './routes/pagos.routes';
 import promesasRoutes from './routes/promesas.routes';
 import botRoutes from './routes/bot.routes';
+import integracionesRoutes from './routes/integraciones.routes';
 import { manejarErrores, rutaNoEncontrada } from './middleware/manejarErrores';
 import './models/Usuario';
 import './models/Propiedad';
@@ -59,6 +60,7 @@ app.use('/api/v1/mis-datos', datosPersonalesRoutes);
 app.use('/api/v1/pagos', pagosRoutes);
 app.use('/api/v1/promesas', promesasRoutes);
 app.use('/api/v1/bot', botRoutes);
+app.use('/api/v1/integraciones', integracionesRoutes);
 
 app.use(rutaNoEncontrada);
 app.use(manejarErrores);

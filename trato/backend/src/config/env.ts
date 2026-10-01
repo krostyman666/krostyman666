@@ -74,16 +74,27 @@ export const env = {
    * Avalúo fiscal por rol. El SII no publica API propia: hay que contratar un
    * proveedor de terceros (BaseAPI u otro con cobertura del catastro SII) que sí
    * la ofrezca vía REST. Mientras `proveedor` sea 'ninguno' (el default sin
-   * contratar), el informe muestra "fuente por conectar" en vez de inventar un
-   * avalúo. Tesorería no entra acá: sus contribuciones exigen ClaveÚnica o Clave
-   * Tributaria del propio contribuyente, así que no hay integración posible sin
-   * pedirle al vendedor su clave del Estado, y el certificado se sube al
-   * expediente como cualquier otro documento.
+   * contratar), `consultarAvaluoFiscal` no llama a nada. Esto es un respaldo:
+   * la vía principal es `avaluoFiscalCache` en la propiedad, que puebla el
+   * flujo de n8n (ver `integraciones.service.ts`) consultando el portal
+   * público por rol, sin pagar nada.
    */
   sii: {
     proveedor: (process.env.SII_PROVEEDOR ?? 'ninguno') as 'ninguno' | 'baseapi',
     baseapiUrl: process.env.BASEAPI_URL ?? 'https://api.baseapi.cl',
     baseapiKey: process.env.BASEAPI_KEY ?? '',
+  },
+
+  /**
+   * Llave que usan los flujos externos (n8n) para empujar datos consultados a
+   * `/api/v1/integraciones/*`. No es un usuario ni un JWT: es un sistema
+   * llamando, no una persona de la operación, y un JWT de 7 días rotando en un
+   * flujo de n8n es más riesgo que una llave fija que se puede revocar
+   * cambiando una variable de entorno. Vacía por defecto: sin ella, las rutas
+   * de integración rechazan todo.
+   */
+  integracion: {
+    apiKey: process.env.INTEGRACION_API_KEY ?? '',
   },
 } as const;
 
