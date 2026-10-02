@@ -24,6 +24,13 @@ export default function BandejaNotaria() {
   const [motivo, setMotivo] = useState('');
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [viendo, setViendo] = useState<string | null>(null);
+  // Sólo se llena al aprobar `inscripcion_dominio`: la nueva partida que
+  // reemplaza a la del vendedor. El backend la exige justo en ese caso.
+  const [nuevaInscripcion, setNuevaInscripcion] = useState<{
+    fojas: string;
+    numeroInscripcion: string;
+    anoInscripcion: string;
+  }>({ fojas: '', numeroInscripcion: '', anoInscripcion: '' });
 
   const cargar = useCallback(async () => {
     try {
@@ -50,17 +57,34 @@ export default function BandejaNotaria() {
     }
   }
 
-  async function validar(docId: string, validacion: 'aprobado' | 'observado') {
+  async function validar(docId: string, validacion: 'aprobado' | 'observado', codigo?: string) {
     if (validacion === 'observado' && !motivo.trim()) return;
+    const esInscripcion = validacion === 'aprobado' && codigo === 'inscripcion_dominio';
+    if (
+      esInscripcion &&
+      (!nuevaInscripcion.fojas.trim() ||
+        !nuevaInscripcion.numeroInscripcion.trim() ||
+        !nuevaInscripcion.anoInscripcion.trim())
+    ) {
+      return;
+    }
     setOcupado(docId);
     setError(null);
     try {
       await api.patch(`/notarias/documentos/${docId}/validacion`, {
         validacion,
         observacionNotaria: validacion === 'observado' ? motivo.trim() : undefined,
+        nuevaInscripcion: esInscripcion
+          ? {
+              fojas: nuevaInscripcion.fojas.trim(),
+              numeroInscripcion: nuevaInscripcion.numeroInscripcion.trim(),
+              anoInscripcion: Number(nuevaInscripcion.anoInscripcion),
+            }
+          : undefined,
       });
       setObservando(null);
       setMotivo('');
+      setNuevaInscripcion({ fojas: '', numeroInscripcion: '', anoInscripcion: '' });
       await cargar();
     } catch (e) {
       setError(mensajeDeError(e));
@@ -156,8 +180,15 @@ export default function BandejaNotaria() {
                       )}
                       <button
                         type="button"
-                        onClick={() => validar(doc.id, 'aprobado')}
-                        disabled={ocupado === doc.id || !doc.tieneArchivo}
+                        onClick={() => validar(doc.id, 'aprobado', doc.codigo)}
+                        disabled={
+                          ocupado === doc.id ||
+                          !doc.tieneArchivo ||
+                          (doc.codigo === 'inscripcion_dominio' &&
+                            (!nuevaInscripcion.fojas.trim() ||
+                              !nuevaInscripcion.numeroInscripcion.trim() ||
+                              !nuevaInscripcion.anoInscripcion.trim()))
+                        }
                         className="inline-flex items-center gap-1.5 rounded-lg bg-cierre-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-cierre-700 disabled:opacity-50"
                       >
                         <Check className="h-3.5 w-3.5" />
@@ -176,6 +207,46 @@ export default function BandejaNotaria() {
                       </button>
                     </div>
                   </div>
+
+                  {doc.codigo === 'inscripcion_dominio' && doc.tieneArchivo && (
+                    <div className="mt-3 rounded-xl bg-trato-50 p-3">
+                      <p className="text-xs font-medium text-trato-900">
+                        Nueva partida de inscripción (reemplaza la del vendedor al aprobar)
+                      </p>
+                      <div className="mt-2 grid grid-cols-3 gap-2">
+                        <input
+                          type="text"
+                          placeholder="Foja"
+                          value={nuevaInscripcion.fojas}
+                          onChange={(e) =>
+                            setNuevaInscripcion((n) => ({ ...n, fojas: e.target.value }))
+                          }
+                          className="rounded-lg border border-trato-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-trato-500"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Número"
+                          value={nuevaInscripcion.numeroInscripcion}
+                          onChange={(e) =>
+                            setNuevaInscripcion((n) => ({
+                              ...n,
+                              numeroInscripcion: e.target.value,
+                            }))
+                          }
+                          className="rounded-lg border border-trato-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-trato-500"
+                        />
+                        <input
+                          type="number"
+                          placeholder="Año"
+                          value={nuevaInscripcion.anoInscripcion}
+                          onChange={(e) =>
+                            setNuevaInscripcion((n) => ({ ...n, anoInscripcion: e.target.value }))
+                          }
+                          className="rounded-lg border border-trato-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-trato-500"
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   {observando === doc.id && (
                     <div className="mt-3 rounded-xl bg-amber-50 p-3">

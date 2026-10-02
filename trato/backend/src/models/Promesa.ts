@@ -40,6 +40,8 @@ export class Promesa extends Model<
 
   declare acordadaEn: CreationOptional<Date | null>;
   declare firmadaEn: CreationOptional<Date | null>;
+  /** Se otorgó la escritura: la notaría aprobó el documento `escritura_compraventa`. */
+  declare cumplidaEn: CreationOptional<Date | null>;
   declare cerradaEn: CreationOptional<Date | null>;
   declare motivoCierre: CreationOptional<string | null>;
 
@@ -87,6 +89,7 @@ Promesa.init(
 
     acordadaEn: { type: DataTypes.DATE, allowNull: true },
     firmadaEn: { type: DataTypes.DATE, allowNull: true },
+    cumplidaEn: { type: DataTypes.DATE, allowNull: true },
     cerradaEn: { type: DataTypes.DATE, allowNull: true },
     motivoCierre: { type: DataTypes.TEXT, allowNull: true },
 

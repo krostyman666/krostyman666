@@ -202,5 +202,15 @@ export async function cambiarEstado(
   estado: EstadoPropiedad,
 ): Promise<Propiedad> {
   const propiedad = await exigirPropia(id, vendedorId);
+  // "Vendida" no se declara: se fija sola cuando la notaría aprueba la
+  // inscripción de dominio, porque recién ahí se transfiere de verdad (ver
+  // dominio/escritura.ts). Permitir que el vendedor la marque a mano dejaría
+  // una propiedad "vendida" sin escritura ni inscripción detrás.
+  if (estado === 'vendida') {
+    throw ErrorApi.solicitudInvalida(
+      'El estado "vendida" no se marca a mano: se fija solo cuando la notaría aprueba la inscripción de dominio.',
+      'vendida_no_manual',
+    );
+  }
   return propiedad.update({ estado });
 }

@@ -39,6 +39,7 @@ router.delete('/clausulas/:clausulaId', autenticar, controlador.quitar);
 router.get('/:promesaId', autenticar, controlador.obtener);
 router.get('/:promesaId/firma', autenticar, controlador.estadoFirma);
 router.patch('/:promesaId/firmar', autenticar, controlador.firmar);
+router.get('/:promesaId/escritura', autenticar, controlador.estadoEscritura);
 router.put(
   '/:promesaId/clausulas/:codigo',
   autenticar,

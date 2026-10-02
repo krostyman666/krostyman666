@@ -127,3 +127,11 @@ export const firmar: RequestHandler = async (req, res, next) => {
     next(error);
   }
 };
+
+export const estadoEscritura: RequestHandler = async (req, res, next) => {
+  try {
+    res.json(await servicio.estadoEscritura(req.params.promesaId, exigirAuth(req)));
+  } catch (error) {
+    next(error);
+  }
+};

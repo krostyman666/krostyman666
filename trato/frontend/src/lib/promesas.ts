@@ -1,3 +1,5 @@
+import type { DocumentoApi } from './propiedades';
+
 export type EstadoPromesa =
   | 'negociando'
   | 'acordada'
@@ -28,6 +30,7 @@ export interface PromesaApi {
   estado: EstadoPromesa;
   acordadaEn: string | null;
   firmadaEn: string | null;
+  cumplidaEn: string | null;
   revisadaEn: string | null;
   motivoCierre: string | null;
   clausulas?: ClausulaApi[];
@@ -88,6 +91,26 @@ export interface EstadoFirmaApi {
   yaFirmaste: boolean;
   puedesFirmar: boolean;
   estaFirmada: boolean;
+}
+
+export interface ExpedienteListoApi {
+  listo: boolean;
+  tieneNotaria: boolean;
+  faltan: {
+    codigo: string;
+    estado: string;
+    validacion: string;
+    vencido: boolean;
+    observacionNotaria: string | null;
+  }[];
+}
+
+export interface EstadoEscrituraApi {
+  promesa: { estado: EstadoPromesa; firmadaEn: string | null; cumplidaEn: string | null };
+  expediente: ExpedienteListoApi;
+  escritura: DocumentoApi | null;
+  inscripcion: DocumentoApi | null;
+  propiedadVendida: boolean;
 }
 
 export const ETIQUETA_ESTADO_PROMESA: Record<EstadoPromesa, string> = {

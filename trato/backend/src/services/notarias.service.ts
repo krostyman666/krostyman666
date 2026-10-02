@@ -1,9 +1,18 @@
-import { Op } from 'sequelize';
+import { Op, type Transaction } from 'sequelize';
+import { sequelize } from '../config/database';
 import { Socio } from '../models/Socio';
 import { Propiedad } from '../models/Propiedad';
 import { Documento, type Validacion } from '../models/Documento';
 import { Usuario } from '../models/Usuario';
+import { Promesa } from '../models/Promesa';
 import { ErrorApi } from '../utils/ErrorApi';
+import { motivoParaEscriturar, motivoParaInscribir } from '../dominio/escritura';
+
+export interface NuevaInscripcion {
+  fojas: string;
+  numeroInscripcion: string;
+  anoInscripcion: number;
+}
 
 export async function listarSocios(
   tipo?: 'notaria' | 'conservador',
@@ -102,54 +111,133 @@ export async function bandeja(usuarioId: string): Promise<CasoBandeja[]> {
   });
 }
 
+/**
+ * Valida un documento, y si es la escritura o la inscripción, cierra la
+ * compraventa con el efecto que corresponde.
+ *
+ * Los dos casos especiales van en la misma transacción que la validación
+ * porque son la misma decisión de la notaría vista desde otro ángulo: aprobar
+ * `escritura_compraventa` ES decir "esto se firmó ante mí", y eso es
+ * exactamente lo que cierra la promesa. Separarlo en un botón aparte dejaría
+ * un estado a medio camino si alguien aprueba el documento y no aprieta el
+ * segundo botón.
+ */
 export async function validarDocumento(
   documentoId: string,
   usuarioId: string,
   validacion: Validacion,
   observacionNotaria?: string | null,
+  nuevaInscripcion?: NuevaInscripcion | null,
 ): Promise<Documento> {
   const notariaId = await socioDelUsuario(usuarioId);
 
-  const documento = await Documento.findByPk(documentoId, {
-    include: [{ model: Propiedad, as: 'propiedad' }],
-  });
-  if (!documento) throw ErrorApi.noEncontrado('Documento no encontrado');
+  return sequelize.transaction(async (t) => {
+    const documento = await Documento.findByPk(documentoId, {
+      include: [{ model: Propiedad, as: 'propiedad' }],
+      transaction: t,
+    });
+    if (!documento) throw ErrorApi.noEncontrado('Documento no encontrado');
 
-  const propiedad = documento.get('propiedad') as Propiedad | undefined;
-  if (propiedad?.notariaId !== notariaId) {
-    throw ErrorApi.prohibido('Esta propiedad no está asignada a tu notaría');
-  }
+    const propiedad = documento.get('propiedad') as Propiedad | undefined;
+    if (propiedad?.notariaId !== notariaId) {
+      throw ErrorApi.prohibido('Esta propiedad no está asignada a tu notaría');
+    }
 
-  if (documento.estado !== 'recibido') {
-    throw ErrorApi.solicitudInvalida(
-      'Todavía no está el documento: no hay nada que revisar',
-      'documento_no_recibido',
+    if (documento.estado !== 'recibido') {
+      throw ErrorApi.solicitudInvalida(
+        'Todavía no está el documento: no hay nada que revisar',
+        'documento_no_recibido',
+      );
+    }
+
+    // Aprobar sin archivo sería aprobar la palabra de que existe. La notaría
+    // responde por lo que valida, así que necesita el papel a la vista. Observarlo
+    // sí se puede: "falta subir el archivo" es justamente lo que hay que decirle
+    // al vendedor.
+    if (validacion === 'aprobado' && !documento.archivoUrl) {
+      throw ErrorApi.solicitudInvalida(
+        'No se puede aprobar un documento sin archivo adjunto',
+        'documento_sin_archivo',
+      );
+    }
+
+    if (validacion === 'observado' && !observacionNotaria?.trim()) {
+      throw ErrorApi.solicitudInvalida(
+        'Para observar un documento hay que decir qué corregir',
+        'falta_observacion',
+      );
+    }
+
+    let promesaParaCerrar: Promesa | null = null;
+
+    if (validacion === 'aprobado' && documento.codigo === 'escritura_compraventa' && propiedad) {
+      promesaParaCerrar = await Promesa.findOne({
+        where: { propiedadId: propiedad.id, estado: 'firmada' },
+        transaction: t,
+      });
+      const expediente = await listoParaEscriturar(propiedad.id, t);
+      const motivo = motivoParaEscriturar({
+        hayPromesaFirmada: promesaParaCerrar !== null,
+        expedienteListo: expediente.listo,
+      });
+      if (motivo) throw ErrorApi.conflicto(motivo, 'no_se_puede_escriturar');
+    }
+
+    if (validacion === 'aprobado' && documento.codigo === 'inscripcion_dominio' && propiedad) {
+      const escritura = await Documento.findOne({
+        where: { propiedadId: propiedad.id, codigo: 'escritura_compraventa' },
+        transaction: t,
+      });
+      const motivo = motivoParaInscribir(Boolean(escritura?.conforme));
+      if (motivo) throw ErrorApi.conflicto(motivo, 'no_se_puede_inscribir');
+      if (!nuevaInscripcion) {
+        throw ErrorApi.solicitudInvalida(
+          'Para aprobar la inscripción hace falta la nueva foja, número y año de inscripción.',
+          'falta_nueva_inscripcion',
+        );
+      }
+    }
+
+    const actualizado = await documento.update(
+      {
+        validacion,
+        validadoPorId: usuarioId,
+        validadoEn: new Date(),
+        observacionNotaria: validacion === 'observado' ? observacionNotaria?.trim() : null,
+      },
+      { transaction: t },
     );
-  }
 
-  // Aprobar sin archivo sería aprobar la palabra de que existe. La notaría
-  // responde por lo que valida, así que necesita el papel a la vista. Observarlo
-  // sí se puede: "falta subir el archivo" es justamente lo que hay que decirle
-  // al vendedor.
-  if (validacion === 'aprobado' && !documento.archivoUrl) {
-    throw ErrorApi.solicitudInvalida(
-      'No se puede aprobar un documento sin archivo adjunto',
-      'documento_sin_archivo',
-    );
-  }
+    // La promesa prometía escriturar; con la escritura aprobada, se cumplió.
+    if (promesaParaCerrar) {
+      await promesaParaCerrar.update(
+        { estado: 'cumplida', cumplidaEn: new Date() },
+        { transaction: t },
+      );
+    }
 
-  if (validacion === 'observado' && !observacionNotaria?.trim()) {
-    throw ErrorApi.solicitudInvalida(
-      'Para observar un documento hay que decir qué corregir',
-      'falta_observacion',
-    );
-  }
+    // El dominio recién se transfiere con la inscripción: por eso la propiedad
+    // pasa a "vendida" acá y no al escriturar, y por eso se reemplaza la
+    // partida de inscripción por la nueva (la del comprador), no la del
+    // vendedor que queda superada.
+    if (
+      validacion === 'aprobado' &&
+      documento.codigo === 'inscripcion_dominio' &&
+      propiedad &&
+      nuevaInscripcion
+    ) {
+      await propiedad.update(
+        {
+          estado: 'vendida',
+          fojas: nuevaInscripcion.fojas,
+          numeroInscripcion: nuevaInscripcion.numeroInscripcion,
+          anoInscripcion: nuevaInscripcion.anoInscripcion,
+        },
+        { transaction: t },
+      );
+    }
 
-  return documento.update({
-    validacion,
-    validadoPorId: usuarioId,
-    validadoEn: new Date(),
-    observacionNotaria: validacion === 'observado' ? observacionNotaria?.trim() : null,
+    return actualizado;
   });
 }
 
@@ -158,9 +246,10 @@ export async function validarDocumento(
  * corresponde antes de la firma. La escritura y la inscripción quedan fuera:
  * son el resultado, no un requisito.
  */
-export async function listoParaEscriturar(propiedadId: string) {
+export async function listoParaEscriturar(propiedadId: string, transaction?: Transaction) {
   const propiedad = await Propiedad.findByPk(propiedadId, {
     include: [{ model: Documento, as: 'documentos' }],
+    transaction,
   });
   if (!propiedad) throw ErrorApi.noEncontrado('Propiedad no encontrada');
 

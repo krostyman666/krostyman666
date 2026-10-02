@@ -34,7 +34,7 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Bot de preguntas del comprador, con cola interna de derivaciones | Listo, probado en navegador |
 | Promesa: negociación de cláusulas entre las partes | Listo, probado en navegador |
 | Firma de la promesa por ambas partes | Listo con firma electrónica simple; FEA pendiente de proveedor |
-| Compraventa y escritura | Pendiente |
+| Compraventa y escritura | La promesa se cierra sola al aprobar la escritura, y la propiedad pasa a vendida al aprobar la inscripción; falta la minuta de la escritura y el trámite de timbres y estampillas |
 | Subida de archivos de documentos | Listo, probado en navegador; a disco local hasta conectar S3 |
 | Integraciones externas | Pendiente — ver doc de integraciones |
 
@@ -406,6 +406,65 @@ alrededor. Por eso:
 El RUT del contrato va formateado con `formatearRut`: es un contrato, no un
 campo de base de datos.
 
+## La escritura y la inscripción
+
+`backend/src/dominio/escritura.ts`. Cierra lo que la promesa prometió. La
+compraventa de inmuebles es solemne (Código Civil, art. 1801 inciso 2°): sólo
+vale si consta en escritura pública, y esa línea ya está trazada en
+`dominio/firma.ts` -- ninguna firma electrónica la reemplaza, tampoco desde
+acá. Por eso este módulo no firma nada: dice cuándo falta la promesa firmada
+o algún certificado, y deja que lo que ya ocurrió fuera de la plataforma --la
+firma ante notario, la inscripción en el Conservador-- se registre cuando
+alguien sube y la notaría aprueba los dos documentos del catálogo que ya
+existían para esto (`escritura_compraventa`, `inscripcion_dominio`).
+
+**Dos actos, no uno.** La escritura traslada el acuerdo a instrumento
+público; el dominio recién se transfiere con la inscripción (Código Civil,
+arts. 686-687: la inscripción es la tradición de los inmuebles). Entre medio
+puede pasar tiempo -- el Conservador tiene hasta 20 días hábiles, más si
+observa algo -- así que son dos eventos separados, no uno con dos nombres:
+
+- Al aprobar `escritura_compraventa`, la notaría está diciendo "esto se
+  firmó ante mí". Eso es exactamente lo que cierra la promesa: su
+  `estado` pasa de `firmada` a `cumplida` (el estado ya existía en
+  `dominio/promesa.ts`, comentado como "se otorgó la escritura", pero nada lo
+  fijaba hasta ahora). La aprobación exige que exista una promesa `firmada`
+  para esa propiedad y que el expediente esté `listo-para-escriturar`
+  (`notarias.service.ts`): no se puede escriturar sin promesa ni con
+  certificados pendientes.
+- Al aprobar `inscripcion_dominio`, la propiedad pasa a `vendida` -- recién
+  ahí, no antes, porque antes de inscribirse el dominio sigue siendo del
+  vendedor aunque ya haya firmado. Esa aprobación exige además la nueva
+  partida (foja, número, año): la del comprador, que reemplaza a la del
+  vendedor en `Propiedad.fojas/numeroInscripcion/anoInscripcion`. Sin esos
+  tres datos no se puede aprobar: no hay inscripción sin partida.
+- **"Vendida" no se declara.** `cambiarEstado` rechaza que el vendedor fije
+  ese estado a mano: permitirlo dejaría una propiedad "vendida" sin
+  escritura ni inscripción detrás. Se fija solo, como efecto de aprobar la
+  inscripción.
+
+Los dos casos van en la misma transacción que la validación del documento
+(`sequelize.transaction`, junto al resto de guardas de `validarDocumento`):
+es la misma decisión de la notaría vista desde otro ángulo, y separarlo en un
+botón aparte dejaría un estado a medio camino si alguien aprueba el documento
+y no aprieta un segundo botón.
+
+**Qué ve cada parte.** `GET /promesas/:id/escritura` (sólo lectura, para
+comprador y vendedor) junta el expediente, el documento de escritura y el de
+inscripción en una sola respuesta, y se muestra en la página de la promesa
+una vez firmada (`SeguimientoEscritura.tsx`): qué certificados faltan, si ya
+se otorgó la escritura, si falta inscribir, y si la venta ya quedó inscrita.
+Nadie acciona nada ahí -- lo que falta lo hace la notaría en su bandeja
+(`BandejaNotaria.tsx`), que ahora pide la nueva partida antes de dejar
+aprobar la inscripción.
+
+No hay negociación de cláusulas acá como en la promesa: los términos de la
+escritura ya los fijó la promesa firmada. Lo que falta armar más adelante es
+la minuta de la escritura misma (quién la redacta, qué cláusulas trae más
+allá de lo que la promesa ya fijó) y el trámite de impuesto de timbres y
+estampillas si hay crédito hipotecario -- hoy el sistema sólo orquesta el
+expediente, no redacta la escritura.
+
 ## El bot de la ficha
 
 `backend/src/dominio/bot.catalogo.ts`. Responde al comprador en la ficha de la
@@ -677,6 +736,7 @@ PATCH /api/v1/promesas/:id/desistir          Bearer { motivo }
 PATCH /api/v1/promesas/:id/revision          Bearer, rol abogado
 GET   /api/v1/promesas/:id/firma             Bearer (parte) → contrato, hash, quién firmó
 PATCH /api/v1/promesas/:id/firmar            Bearer (parte) → firma electrónica simple
+GET   /api/v1/promesas/:id/escritura         Bearer (parte) → expediente, escritura e inscripción; solo lectura
 
 GET   /api/v1/bot/sugeridas                   público: preguntas de arranque
 GET   /api/v1/bot/propiedad/:id              público: historial de una sesión  ?sesion=
@@ -716,7 +776,10 @@ PATCH /api/v1/visitas/:id/resultado          Bearer, rol asesor   { estado }
 
 GET   /api/v1/notarias                       ?tipo=notaria|conservador&comuna
 GET   /api/v1/notarias/bandeja               Bearer, rol notaria
-PATCH /api/v1/notarias/documentos/:docId/validacion   Bearer, rol notaria
+PATCH /api/v1/notarias/documentos/:docId/validacion   Bearer, rol notaria  { validacion, observacionNotaria?, nuevaInscripcion? }
+  -- nuevaInscripcion { fojas, numeroInscripcion, anoInscripcion } es obligatorio sólo al aprobar
+     inscripcion_dominio: cierra la promesa (si es escritura_compraventa) o la propiedad
+     (si es inscripcion_dominio) en la misma transacción. Ver "La escritura y la inscripción".
 
 GET   /api/v1/integraciones/propiedades-pendientes          x-integracion-key  ?tipo=avaluo_fiscal|contribuciones
 PATCH /api/v1/integraciones/propiedades/:id/avaluo-fiscal   x-integracion-key  { avaluoTotal, avaluoExento, avaluoAfecto, vigencia }
@@ -806,6 +869,17 @@ Para la promesa:
 - Ley 19.799, firma electrónica y servicios de certificación: https://www.bcn.cl/leychile/navegar?idNorma=196640
 - El contrato de promesa (Juan Andrés Orrego): https://www.juanandresorrego.cl/assets/pdf/apu/ap_6/Contrato%20de%20Promesa.pdf
 - Promesa de compraventa de inmueble, requisitos: https://toroblancoabogados.cl/promesa-compraventa-inmueble-chile/
+
+Para la escritura y la inscripción:
+
+- Código Civil, arts. 1801 (solemnidad de la compraventa de inmuebles) y 686-687
+  (la inscripción como tradición): https://leyes-cl.com/codigo_civil
+- ChileAtiende, inscripción de una propiedad (documentos, plazo de 20 días
+  hábiles, costo): https://www.chileatiende.gob.cl/fichas/12116-inscripcion-de-una-propiedad
+- Becker Abogados, notaría y Conservador (custodia notarial del pago, rol del
+  banco si hay crédito): https://www.beckerabogados.cl/en/blog/the-final-hurdles-understanding-the-notary-and-the-conservador-de-bienes-raices/
+- SII, IVA inmuebles tras la reforma tributaria (no aplica entre personas
+  naturales salvo venta habitual): https://www.sii.cl/portales/reforma_tributaria/iva_inmuebles.pdf
 
 ## Documentos de estrategia
 

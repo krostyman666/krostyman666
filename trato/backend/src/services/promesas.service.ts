@@ -5,7 +5,9 @@ import { ClausulaPromesa } from '../models/ClausulaPromesa';
 import { FirmaPromesa } from '../models/FirmaPromesa';
 import { Propiedad } from '../models/Propiedad';
 import { Usuario } from '../models/Usuario';
+import { Documento } from '../models/Documento';
 import { ErrorApi } from '../utils/ErrorApi';
+import * as notarias from './notarias.service';
 import {
   CLAUSULAS,
   CLAUSULA_POR_CODIGO,
@@ -367,6 +369,33 @@ export async function desistir(
     );
   }
   return promesa.update({ estado: 'desistida', cerradaEn: new Date(), motivoCierre: motivo });
+}
+
+/**
+ * Cómo va el cierre de esta compraventa: si el expediente está listo para
+ * escriturar, y qué pasó con los documentos de escritura e inscripción. Es de
+ * sólo lectura -- las partes no accionan nada acá, lo que falta lo hace la
+ * notaría al validar esos dos documentos (ver notarias.service.ts).
+ */
+export async function estadoEscritura(promesaId: string, usuarioId: string) {
+  const promesa = await cargar(promesaId);
+  exigirParte(promesa, usuarioId);
+  const propiedad = promesa.get('propiedad') as Propiedad;
+
+  const [expediente, documentos] = await Promise.all([
+    notarias.listoParaEscriturar(propiedad.id),
+    Documento.findAll({
+      where: { propiedadId: propiedad.id, codigo: { [Op.in]: ['escritura_compraventa', 'inscripcion_dominio'] } },
+    }),
+  ]);
+
+  return {
+    promesa: { estado: promesa.estado, firmadaEn: promesa.firmadaEn, cumplidaEn: promesa.cumplidaEn },
+    expediente,
+    escritura: documentos.find((d) => d.codigo === 'escritura_compraventa')?.toJSON() ?? null,
+    inscripcion: documentos.find((d) => d.codigo === 'inscripcion_dominio')?.toJSON() ?? null,
+    propiedadVendida: propiedad.estado === 'vendida',
+  };
 }
 
 /** La revisión del abogado antes de la firma. */

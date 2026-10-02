@@ -47,6 +47,7 @@ export const validarDocumento: RequestHandler = async (req, res, next) => {
       exigirAuth(req),
       req.body.validacion,
       req.body.observacionNotaria,
+      req.body.nuevaInscripcion,
     );
     res.json({ documento: documento.toJSON() });
   } catch (error) {
