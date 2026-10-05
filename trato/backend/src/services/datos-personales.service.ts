@@ -8,6 +8,7 @@ import { Visita, ESTADOS_VISITA_ACTIVOS } from '../models/Visita';
 import { Informe } from '../models/Informe';
 import { Consentimiento } from '../models/Consentimiento';
 import { SolicitudDatos, type ResultadoSolicitud } from '../models/SolicitudDatos';
+import { PurgaRegistro } from '../models/PurgaRegistro';
 import { ErrorApi } from '../utils/ErrorApi';
 import {
   CAMPOS_RECTIFICABLES,
@@ -254,8 +255,14 @@ export async function datosVencidos(ahora = new Date()) {
 
     let cuantos = 0;
     if (actividad.codigo === 'visitas') {
+      // mensaje ya en null es una visita que la purga (o una supresión) ya
+      // anonimizó: no cuenta como pendiente, si no la lista nunca converge.
       cuantos = await Visita.count({
-        where: { estado: { [Op.notIn]: ESTADOS_VISITA_ACTIVOS }, fin: { [Op.lt]: corte } },
+        where: {
+          estado: { [Op.notIn]: ESTADOS_VISITA_ACTIVOS },
+          fin: { [Op.lt]: corte },
+          mensaje: { [Op.ne]: null },
+        },
       });
     } else if (actividad.codigo === 'informes') {
       cuantos = await Informe.count({ where: { createdAt: { [Op.lt]: corte } } });
@@ -274,4 +281,79 @@ export async function datosVencidos(ahora = new Date()) {
   }
 
   return vencidos;
+}
+
+/** Las últimas corridas de la purga, para que quede a la vista que no es la primera vez. */
+export async function historialPurgas(limite = 5): Promise<PurgaRegistro[]> {
+  return PurgaRegistro.findAll({
+    include: [{ model: Usuario, as: 'ejecutadaPor', attributes: ['id', 'nombre', 'apellido'] }],
+    order: [['createdAt', 'DESC']],
+    limit: limite,
+  });
+}
+
+export interface AccionPurga {
+  actividad: string;
+  categoria: string;
+  cuantos: number;
+  accion: 'anonimizado';
+}
+
+/**
+ * Ejecuta la purga de lo vencido -- lo que `datosVencidos()` sólo informaba.
+ *
+ * No toca todo lo que aparece en esa lista. De las categorías con plazo, sólo
+ * `visitas` tiene una acción segura y ya establecida: borrar el mensaje libre,
+ * exactamente lo que `ejecutarSupresion` hace a pedido de un comprador. Las
+ * demás son evidencia que no conviene purgar a ciegas:
+ *
+ * - `informes` es la prueba de qué se le entregó al comprador y cuándo, y si
+ *   lleva firma de abogado respalda una responsabilidad profesional. Decidir
+ *   qué de su `contenido` (una foto JSON del informe) se puede anonimizar sin
+ *   perder ese valor probatorio es una decisión de abogado, no de un bucle
+ *   genérico.
+ * - `consentimientos` ni siquiera se edita: el propio modelo lo dice --
+ *   revocar llena `revocadoEn` y el historial queda intacto, porque borrar la
+ *   fila destruiría justo la prueba de que el tratamiento estuvo autorizado.
+ * - `rut`, `propiedad` y `expediente` cuentan desde que cierra la operación, y
+ *   hoy no existe ese instante como campo (no hay "vendidaEn"): inventarlo acá
+ *   sería adivinar, así que `datosVencidos()` tampoco los detecta todavía.
+ *
+ * Sigue siendo una decisión operativa y no un cron que nadie revisa -- lo que
+ * cambia es que ahora hay cómo ejecutarla, en vez de sólo mirar la lista.
+ */
+export async function purgarVencidos(
+  ejecutadaPorId: string,
+  ahora = new Date(),
+): Promise<AccionPurga[]> {
+  const acciones: AccionPurga[] = [];
+
+  const actividadVisitas = REGISTRO_TRATAMIENTO.find((a) => a.codigo === 'visitas');
+  if (actividadVisitas?.conservacionMeses !== null && actividadVisitas?.conservacionMeses !== undefined) {
+    const corte = new Date(ahora);
+    corte.setMonth(corte.getMonth() - actividadVisitas.conservacionMeses);
+
+    const [cuantos] = await Visita.update(
+      { mensaje: null },
+      {
+        where: {
+          estado: { [Op.notIn]: ESTADOS_VISITA_ACTIVOS },
+          fin: { [Op.lt]: corte },
+          mensaje: { [Op.ne]: null },
+        },
+      },
+    );
+    if (cuantos > 0) {
+      acciones.push({
+        actividad: actividadVisitas.codigo,
+        categoria: actividadVisitas.categoria,
+        cuantos,
+        accion: 'anonimizado',
+      });
+    }
+  }
+
+  await PurgaRegistro.create({ ejecutadaPorId, acciones: acciones as unknown as Record<string, unknown>[] });
+
+  return acciones;
 }

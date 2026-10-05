@@ -29,7 +29,7 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Cobro del informe por transferencia, con conciliación manual | Listo, probado en navegador |
 | Cobro con tarjeta (Flow) | Pendiente — falta contratar y poner credenciales |
 | Derechos del titular: acceso, rectificación, supresión, oposición, portabilidad | Listo, probado en navegador |
-| Registro de actividades de tratamiento y plazos de conservación | Listo; la purga de lo vencido se informa, no se ejecuta sola |
+| Registro de actividades de tratamiento y plazos de conservación | Listo; la purga de lo vencido ahora se puede ejecutar (`/datos-vencidos`, admin), aunque sigue siendo un botón que alguien aprieta, no un cron |
 | Conexión a SII y Tesorería para avalúo y contribuciones | Listo el conector, el nodo de n8n y la carga manual (`/datos-externos`) para cuando el flujo no pueda; falta terminar de armar el flujo (consultar los portales por rol) y correrlo por primera vez |
 | Bot de preguntas del comprador, con cola interna de derivaciones | Listo, probado en navegador |
 | Promesa: negociación de cláusulas entre las partes | Listo, probado en navegador |
@@ -608,8 +608,6 @@ Falta, en orden de riesgo:
 
 - **Notificación de brechas en 72 horas.** Necesita detección y un procedimiento,
   no sólo intención.
-- **Ejecutar la purga de lo vencido.** `datosVencidos()` informa qué pasó su
-  plazo; borrarlo o anonimizarlo es todavía una decisión manual.
 - **Confirmar el catálogo con abogado.** Plazos de vigencia, obligatoriedad de
   cada documento, los plazos de conservación y los textos de consentimiento.
 
@@ -645,6 +643,35 @@ Las decisiones que conviene entender antes de tocarlo:
 
 Los plazos de conservación hay que confirmarlos con abogado. El de 6 años viene
 de la prescripción tributaria extendida; los demás son criterios comerciales.
+
+**La purga de lo vencido ya se puede ejecutar, no sólo leer.**
+`datosVencidos()` seguía informando qué pasó su plazo sin que nada lo
+ejecutara -- el comentario del propio archivo decía que era "una decisión
+operativa que conviene tomar mirando la lista, no en un cron que nadie
+revisa", y esa razón sigue en pie: `purgarVencidos()` (rol admin, botón en
+`/datos-vencidos`) es ese "mirando la lista" hecho ejecutable, no un cron
+silencioso. No toca todo lo que la lista muestra:
+
+- **`visitas`** es la única categoría con acción real: borra el mensaje
+  libre de las visitas cerradas y vencidas, lo mismo que `ejecutarSupresion`
+  ya hace a pedido de un comprador, aplicado ahora por fecha a todas.
+- **`informes`** no se toca. Es la prueba de qué se entregó y cuándo, y si
+  lleva firma de abogado respalda una responsabilidad profesional: qué
+  anonimizar de su `contenido` (una foto JSON) sin perder ese valor
+  probatorio es una decisión de abogado, no de un bucle genérico.
+- **`consentimientos`** tampoco. El propio modelo ya lo dice: sus filas no se
+  editan ni se borran nunca, porque revocar llena `revocadoEn` y el
+  historial intacto es justo la prueba de que el tratamiento estuvo
+  autorizado en su momento.
+- **`rut`, `propiedad` y `expediente`** cuentan desde que cierra la
+  operación, y ese instante no existe todavía como campo (no hay
+  "vendidaEn"): inventarlo sería adivinar, así que ni `datosVencidos()` ni la
+  purga los tocan por ahora.
+
+Cada corrida queda en `purgas_registro` (quién la ejecutó, cuándo, qué
+anonimizó), visible en `/datos-vencidos` como historial -- la misma lógica de
+evidencia fechada que `solicitudes_datos`, pero para esta acción operativa en
+vez de un derecho que ejerce un titular.
 
 ## Visitas
 
@@ -757,7 +784,8 @@ GET   /api/v1/mis-datos/exportar             Bearer → JSON completo (acceso y 
 PATCH /api/v1/mis-datos                      Bearer { nombre?, apellido?, telefono?, email? }
 GET   /api/v1/mis-datos/supresion            Bearer → qué se borraría y qué se retiene
 DELETE /api/v1/mis-datos                     Bearer → anonimiza la cuenta
-GET   /api/v1/mis-datos/vencidos             Bearer, rol admin
+GET   /api/v1/mis-datos/vencidos             Bearer, rol admin  → lo vencido + historial de purgas
+POST  /api/v1/mis-datos/vencidos/purgar      Bearer, rol admin  → ejecuta la purga; ver "Datos personales"
 
 POST  /api/v1/economia/modelo                Bearer, rol admin  { precioVentaUf, asesores, abogados, supuestos }
 

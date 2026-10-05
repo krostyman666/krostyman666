@@ -33,5 +33,6 @@ router.get('/supresion', autenticar, controlador.evaluarSupresion);
 router.delete('/', autenticar, controlador.suprimir);
 
 router.get('/vencidos', autenticar, exigirRol('admin'), controlador.vencidos);
+router.post('/vencidos/purgar', autenticar, exigirRol('admin'), controlador.purgar);
 
 export default router;

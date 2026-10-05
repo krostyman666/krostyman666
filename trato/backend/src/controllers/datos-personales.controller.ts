@@ -61,7 +61,19 @@ export const suprimir: RequestHandler = async (req, res, next) => {
 
 export const vencidos: RequestHandler = async (_req, res, next) => {
   try {
-    res.json({ vencidos: await servicio.datosVencidos() });
+    const [vencidos, historial] = await Promise.all([
+      servicio.datosVencidos(),
+      servicio.historialPurgas(),
+    ]);
+    res.json({ vencidos, historial });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const purgar: RequestHandler = async (req, res, next) => {
+  try {
+    res.json({ acciones: await servicio.purgarVencidos(exigirAuth(req)) });
   } catch (error) {
     next(error);
   }

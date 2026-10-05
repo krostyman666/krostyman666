@@ -26,6 +26,7 @@ import './models/Visita';
 import './models/Consentimiento';
 import './models/Informe';
 import './models/SolicitudDatos';
+import './models/PurgaRegistro';
 import './models/Pago';
 import './models/Promesa';
 import './models/ClausulaPromesa';

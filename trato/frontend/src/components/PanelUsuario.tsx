@@ -97,6 +97,12 @@ export default function PanelUsuario() {
               >
                 Modelo económico
               </Link>
+              <Link
+                href="/datos-vencidos"
+                className="rounded-lg px-3 py-2 text-sm font-medium text-tinta-suave transition hover:bg-tinta/5 hover:text-tinta"
+              >
+                Datos vencidos
+              </Link>
             </>
           )}
           <Link
