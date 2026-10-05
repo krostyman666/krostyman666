@@ -19,9 +19,25 @@ export const crear: RequestHandler = async (req, res, next) => {
   }
 };
 
+const ORDENES_VALIDOS = ['recientes', 'precio_asc', 'precio_desc'] as const;
+
 export const buscar: RequestHandler = async (req, res, next) => {
   try {
     const q = req.query;
+    const ordenar = ORDENES_VALIDOS.includes(q.ordenar as (typeof ORDENES_VALIDOS)[number])
+      ? (q.ordenar as (typeof ORDENES_VALIDOS)[number])
+      : undefined;
+
+    const bbox =
+      q.bboxNorte && q.bboxSur && q.bboxEste && q.bboxOeste
+        ? {
+            norte: Number(q.bboxNorte),
+            sur: Number(q.bboxSur),
+            este: Number(q.bboxEste),
+            oeste: Number(q.bboxOeste),
+          }
+        : undefined;
+
     const resultado = await servicio.buscar({
       comuna: q.comuna as string | undefined,
       tipo: q.tipo as TipoPropiedad | undefined,
@@ -29,6 +45,11 @@ export const buscar: RequestHandler = async (req, res, next) => {
       precioMin: q.precioMin ? Number(q.precioMin) : undefined,
       precioMax: q.precioMax ? Number(q.precioMax) : undefined,
       dormitoriosMin: q.dormitoriosMin ? Number(q.dormitoriosMin) : undefined,
+      superficieMin: q.superficieMin ? Number(q.superficieMin) : undefined,
+      estacionamientosMin: q.estacionamientosMin ? Number(q.estacionamientosMin) : undefined,
+      conBodega: q.conBodega === 'true' ? true : undefined,
+      bbox,
+      ordenar,
       pagina: q.pagina ? Number(q.pagina) : undefined,
       porPagina: q.porPagina ? Number(q.porPagina) : undefined,
     });

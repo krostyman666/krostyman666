@@ -9,6 +9,7 @@ import {
 import { Documento } from '../models/Documento';
 import { Usuario } from '../models/Usuario';
 import { documentosAplicables } from '../dominio/documentos.catalogo';
+import { redondearSector } from '../utils/geo';
 import { ErrorApi } from '../utils/ErrorApi';
 
 export interface FiltrosBusqueda {
@@ -18,8 +19,38 @@ export interface FiltrosBusqueda {
   precioMin?: number;
   precioMax?: number;
   dormitoriosMin?: number;
+  superficieMin?: number;
+  estacionamientosMin?: number;
+  conBodega?: boolean;
+  /** Recorte del mapa (vista actual), para refrescar la lista al mover/zoom. */
+  bbox?: { norte: number; sur: number; este: number; oeste: number };
+  ordenar?: 'recientes' | 'precio_asc' | 'precio_desc';
   pagina?: number;
   porPagina?: number;
+}
+
+/**
+ * Lo que nadie fuera del dueño, su notaría o el equipo interno necesita ver:
+ * identificadores internos y antecedentes de inscripción/avalúo, que van en
+ * el informe pagado, no en la vitrina. Comparte lista `obtenerPublica` (la
+ * ficha) y `buscar` (el listado) -- antes `buscar` no excluía nada.
+ */
+const ATRIBUTOS_INTERNOS = [
+  'fojas',
+  'numeroInscripcion',
+  'anoInscripcion',
+  'rolAvaluo',
+  'avaluoFiscalCache',
+  'contribucionesCache',
+  'vendedorId',
+  'notariaId',
+  'conservadorId',
+] as const;
+
+function conSectorAproximado(propiedad: Propiedad): Propiedad {
+  propiedad.setDataValue('latitud', redondearSector(propiedad.latitud));
+  propiedad.setDataValue('longitud', redondearSector(propiedad.longitud));
+  return propiedad;
 }
 
 export async function crear(
@@ -49,6 +80,12 @@ export async function crear(
   });
 }
 
+const ORDEN: Record<NonNullable<FiltrosBusqueda['ordenar']>, [string, string][]> = {
+  recientes: [['createdAt', 'DESC']],
+  precio_asc: [['precio', 'ASC']],
+  precio_desc: [['precio', 'DESC']],
+};
+
 export async function buscar(filtros: FiltrosBusqueda) {
   const pagina = Math.max(1, filtros.pagina ?? 1);
   const porPagina = Math.min(50, Math.max(1, filtros.porPagina ?? 20));
@@ -60,6 +97,13 @@ export async function buscar(filtros: FiltrosBusqueda) {
   if (filtros.dormitoriosMin) {
     Object.assign(where, { dormitorios: { [Op.gte]: filtros.dormitoriosMin } });
   }
+  if (filtros.superficieMin) {
+    Object.assign(where, { superficieConstruida: { [Op.gte]: filtros.superficieMin } });
+  }
+  if (filtros.estacionamientosMin) {
+    Object.assign(where, { estacionamientos: { [Op.gte]: filtros.estacionamientosMin } });
+  }
+  if (filtros.conBodega) Object.assign(where, { bodegas: { [Op.gte]: 1 } });
   if (filtros.moneda) Object.assign(where, { moneda: filtros.moneda });
 
   if (filtros.precioMin != null || filtros.precioMax != null) {
@@ -75,14 +119,25 @@ export async function buscar(filtros: FiltrosBusqueda) {
     if (!filtros.moneda) Object.assign(where, { moneda: 'uf' });
   }
 
+  // El recorte del mapa filtra sobre la coordenada real en BD, no sobre el
+  // sector redondeado que se devuelve: filtrar por el valor ya redondeado
+  // dejaría fuera propiedades que sí están dentro del recuadro visible.
+  if (filtros.bbox) {
+    Object.assign(where, {
+      latitud: { [Op.between]: [filtros.bbox.sur, filtros.bbox.norte] },
+      longitud: { [Op.between]: [filtros.bbox.oeste, filtros.bbox.este] },
+    });
+  }
+
   const { rows, count } = await Propiedad.findAndCountAll({
     where,
+    attributes: { exclude: [...ATRIBUTOS_INTERNOS] },
     limit: porPagina,
     offset: (pagina - 1) * porPagina,
-    order: [['createdAt', 'DESC']],
+    order: ORDEN[filtros.ordenar ?? 'recientes'],
   });
 
-  return { propiedades: rows, total: count, pagina, porPagina };
+  return { propiedades: rows.map(conSectorAproximado), total: count, pagina, porPagina };
 }
 
 export async function obtener(id: string): Promise<Propiedad> {
@@ -106,28 +161,18 @@ export async function obtener(id: string): Promise<Propiedad> {
  */
 export async function obtenerPublica(id: string): Promise<Propiedad> {
   const propiedad = await Propiedad.findByPk(id, {
-    attributes: {
-      exclude: [
-        // Antecedentes de la inscripción: van en el informe, no en la vitrina.
-        'fojas',
-        'numeroInscripcion',
-        'anoInscripcion',
-        'rolAvaluo',
-        'avaluoFiscalCache',
-        'contribucionesCache',
-        // Identificadores internos que no le sirven a quien mira la ficha.
-        'vendedorId',
-        'notariaId',
-        'conservadorId',
-      ],
-    },
+    attributes: { exclude: [...ATRIBUTOS_INTERNOS] },
     include: [{ model: Usuario, as: 'vendedor', attributes: ['nombre'] }],
   });
 
   if (!propiedad || !['publicada', 'reservada', 'vendida'].includes(propiedad.estado)) {
     throw ErrorApi.noEncontrado('Propiedad no encontrada');
   }
-  return propiedad;
+  // La coordenada exacta tampoco va en la ficha pública, por la misma razón
+  // que la dirección exacta: mandar el punto real en el JSON y sólo dibujar
+  // un círculo en el cliente (lo que hacía antes `MapaPropiedad`) no protege
+  // nada -- cualquiera que mire la respuesta cruda ve la ubicación exacta.
+  return conSectorAproximado(propiedad);
 }
 
 /**

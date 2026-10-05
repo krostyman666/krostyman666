@@ -114,6 +114,14 @@ export interface PropiedadApi {
   dormitorios: number | null;
   banos: number | null;
   superficieConstruida: number | null;
+  estacionamientos?: number;
+  bodegas?: number;
+  /**
+   * Redondeada a ~100 m por el backend (sector, no punto exacto) para
+   * cualquiera que no tenga acceso al expediente. Ver `redondearSector`.
+   */
+  latitud: number | null;
+  longitud: number | null;
   fotos?: string[];
 }
 

@@ -16,7 +16,7 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Login (UI + API) | Listo, probado en navegador |
 | Panel `/panel` con guard de sesión | Listo, probado en navegador |
 | Publicar propiedad + expediente de documentos | Listo, probado en navegador |
-| Búsqueda pública `/propiedades` con filtros | Listo, probado en navegador |
+| Búsqueda pública `/propiedades` con filtros, mapa y "buscar en esta zona" | Listo, probado en navegador |
 | Ficha pública `/propiedades/:id` con galería y mapa | Listo, probado en navegador |
 | Agendamiento de visitas (disponibilidad + cupos + reserva) | Listo, probado en navegador |
 | Visita individual u open house, a elección del vendedor | Listo, probado en navegador |
@@ -66,8 +66,16 @@ hay que pasar a migraciones antes del primer deploy.
 ## Decisiones tomadas
 
 - **Next 16 / React 19 / ESLint 9 (flat config)**: proyecto nuevo, sin nada que
-  migrar, y cerró un CVE crítico de Next. `npm audit` queda en 0 vulnerabilidades
-  salvo `uuid` (moderada, transitiva de Sequelize, ruta `buf` que no usamos).
+  migrar, y cerró un CVE crítico de Next. En producción, `npm audit --omit=dev`
+  queda en 0 vulnerabilidades salvo `uuid` (moderada, transitiva de Sequelize,
+  ruta `buf` que no usamos). Incluyendo devDependencies aparece además una
+  cadena de `braces`/`micromatch` (DoS por stack-exhaustion) arrastrada por
+  jest, tailwindcss y ts-node-dev -- no llega a producción, pero arreglarla
+  pide subir de versión mayor esas herramientas, así que queda pendiente de
+  evaluar aparte en vez de forzarla a ciegas. Next mismo se mantuvo al día
+  dentro del propio rango (16.3.5 → 16.3.6) cuando se publicó un RCE crítico
+  en `next/og` (GHSA-vcvr-r3jv-pc5j): ese parche sí se aplicó, porque no pedía
+  ningún cambio de versión mayor.
 - **RUT duplicado en `backend/src/utils/rut.ts` y `frontend/src/lib/rut.ts`**: el
   módulo 11 está fijado por ley y no cambia. Se mueve a `shared/` cuando aparezca
   el segundo módulo compartido (probablemente tipos de propiedad o estados de
@@ -78,9 +86,18 @@ hay que pasar a migraciones antes del primer deploy.
   hipotecario se mencionan pero no se estiman: no inventamos cifras legales.
 - **UF**: `UF_FALLBACK_CLP` en `frontend/src/lib/comision.ts` es un placeholder.
   Conectar a mindicador.cl antes de producción.
-- **Mapa con iframe de OpenStreetMap**, sin dependencia ni API key. Alcanza para
-  mostrar el sector; cuando se decida proveedor (Google cobra y pide llave) se
-  reemplaza `MapaPropiedad` y nada más.
+- **Mapa de una propiedad (`MapaPropiedad`): iframe de OpenStreetMap**, sin
+  dependencia ni API key. Alcanza para un solo punto.
+- **Mapa de resultados (`MapaResultados`, en `/propiedades`): dos proveedores.**
+  Un iframe no sirve para varios pines con comportamiento propio (clic,
+  resaltado al pasar el mouse por la tarjeta), así que hace falta una librería
+  de mapas de verdad. Por defecto usa Leaflet + OpenStreetMap -- gratis, sin
+  llave, sin dependencia de React (así no arriesga nada con React 19). Si se
+  configura `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, el mismo componente cambia a
+  Google Maps (`@googlemaps/js-api-loader`, también sin dependencia de React)
+  sin que el resto del código se entere. Ningún dato nuevo se manda al
+  proveedor que no se mandara ya: sólo coordenada, precio y el id para armar
+  el link a la ficha.
 - **El filtro de precio se ancla a una moneda.** `precio` guarda el número sin
   la moneda, así que un rango suelto mezclaría UF con pesos. El arreglo de
   verdad es una columna normalizada; mientras no exista, el rango asume UF.
@@ -186,6 +203,24 @@ La dirección exacta tampoco va en la ficha. `MapaPropiedad` dibuja un círculo 
 sector y sólo marca el punto con `exacta`, que se usa una vez confirmada la
 visita: si el número va en la página pública, cualquiera llega al vendedor por
 fuera y la plataforma no cobra por lo que hizo.
+
+**La coordenada se redondea en el backend, no sólo se disimula en el cliente.**
+Antes `obtenerPublica` mandaba `latitud`/`longitud` exactas en el JSON y sólo
+`MapaPropiedad` las dibujaba con un círculo encima: quien mirara la respuesta
+cruda (pestaña de red del navegador, un `curl`) veía igual el punto real, sin
+que nadie lo pidiera a propósito. `redondearSector` (`backend/src/utils/geo.ts`)
+redondea a 3 decimales (~110 m) antes de responder, para la ficha pública y
+para la búsqueda. El dueño, su notaría y el equipo interno siguen viendo la
+coordenada exacta (`obtener`, no `obtenerPublica`).
+
+**La búsqueda (`GET /propiedades`) no filtraba ningún campo.** A diferencia de
+`obtenerPublica`, que desde el principio excluía los datos internos,
+`buscar()` devolvía la fila de Sequelize completa: `vendedorId`, `notariaId`,
+`conservadorId`, fojas/número/año de inscripción y las cachés de avalúo y
+contribuciones, a cualquiera sin sesión. Se encontró al tocar este mismo
+endpoint para sumarle coordenadas al mapa de resultados, y se corrigió usando
+la misma lista de exclusión (`ATRIBUTOS_INTERNOS`, compartida ahora por
+`buscar` y `obtenerPublica`) en `backend/src/services/propiedades.service.ts`.
 
 ## El informe en dos niveles
 
@@ -721,7 +756,13 @@ POST  /api/v1/auth/registro   { email, password, nombre, apellido, rut, telefono
 POST  /api/v1/auth/ingreso    { email, password }        → { token, usuario }
 GET   /api/v1/auth/perfil     Bearer                     → { usuario }
 
-GET   /api/v1/propiedades                    ?comuna&tipo&moneda&precioMin&precioMax&dormitoriosMin&pagina
+GET   /api/v1/propiedades                    ?comuna&tipo&moneda&precioMin&precioMax&dormitoriosMin
+                                              &superficieMin&estacionamientosMin&conBodega&ordenar
+                                              &bboxNorte&bboxSur&bboxEste&bboxOeste&pagina
+  -- bbox* filtra por el recuadro visible del mapa de resultados ("buscar en esta
+     zona"); sin ellos, nacional. ordenar: recientes (default) | precio_asc | precio_desc.
+     latitud/longitud en la respuesta vienen redondeadas a ~110 m (sector, no punto
+     exacto) -- ver "La ficha pública y el límite con el expediente".
 GET   /api/v1/propiedades/mias               Bearer
 GET   /api/v1/propiedades/pendientes-datos-externos   Bearer, rol admin|asesor  ?tipo=avaluo_fiscal|contribuciones
 POST  /api/v1/propiedades                    Bearer

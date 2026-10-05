@@ -16,3 +16,22 @@
     @apply outline-none ring-2 ring-trato-500 ring-offset-2;
   }
 }
+
+/* Pin del mapa de resultados cuando el proveedor es Google Maps (AdvancedMarkerElement
+   pinta contenido HTML tal cual, sin pasar por Tailwind @apply). */
+.trato-pin {
+  cursor: pointer;
+  border-radius: 9999px;
+  background: #059669;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+}
+
+.trato-pin--activa {
+  background: #0f172a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
