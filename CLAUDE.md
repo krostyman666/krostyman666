@@ -30,6 +30,7 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Cobro con tarjeta (Flow) | Pendiente — falta contratar y poner credenciales |
 | Derechos del titular: acceso, rectificación, supresión, oposición, portabilidad | Listo, probado en navegador |
 | Registro de actividades de tratamiento y plazos de conservación | Listo; la purga de lo vencido ahora se puede ejecutar (`/datos-vencidos`, admin), aunque sigue siendo un botón que alguien aprieta, no un cron |
+| Notificación de brechas de seguridad en 72 horas | Listo, probado en navegador (`/incidentes`, admin) |
 | Conexión a SII y Tesorería para avalúo y contribuciones | Listo el conector, el nodo de n8n y la carga manual (`/datos-externos`) para cuando el flujo no pueda; falta terminar de armar el flujo (consultar los portales por rol) y correrlo por primera vez |
 | Bot de preguntas del comprador, con cola interna de derivaciones | Listo, probado en navegador |
 | Promesa: negociación de cláusulas entre las partes | Listo, probado en navegador |
@@ -667,13 +668,15 @@ Cubierto:
 - Los cinco derechos del titular, en `/mis-datos`. Ver la sección siguiente.
 - Registro de actividades de tratamiento, con finalidad, base y plazo por
   categoría.
+- Notificación de vulneraciones de seguridad en 72 horas, con el plazo
+  corriendo desde que el equipo toma conocimiento. Ver la sección siguiente.
 
 Falta, en orden de riesgo:
 
-- **Notificación de brechas en 72 horas.** Necesita detección y un procedimiento,
-  no sólo intención.
 - **Confirmar el catálogo con abogado.** Plazos de vigencia, obligatoriedad de
   cada documento, los plazos de conservación y los textos de consentimiento.
+  Incluye confirmar `CATEGORIAS_ALTO_RIESGO` en `dominio/brechas.ts`: hoy es
+  un punto de partida razonable, no una calificación legal verificada.
 
 ## Datos personales y derechos del titular
 
@@ -736,6 +739,54 @@ Cada corrida queda en `purgas_registro` (quién la ejecutó, cuándo, qué
 anonimizó), visible en `/datos-vencidos` como historial -- la misma lógica de
 evidencia fechada que `solicitudes_datos`, pero para esta acción operativa en
 vez de un derecho que ejerce un titular.
+
+## Notificación de brechas de seguridad
+
+`backend/src/dominio/brechas.ts`. La Ley 21.719 (art. 14 sexies) define
+"vulneración de seguridad" en términos amplios -- destrucción, filtración,
+pérdida o alteración accidental o ilícita de datos personales, o su acceso
+por quien no está autorizado -- sin exigir intención maliciosa, y de ahí
+nacen dos obligaciones separadas:
+
+- **Notificar a la Agencia de Protección de Datos Personales**, siempre, "sin
+  demora indebida". La ley no fija un número de horas en su propio texto; la
+  referencia operativa que usan los comentaristas (alineada al RGPD) son 72
+  horas desde que el equipo **toma conocimiento** del incidente, no desde que
+  ocurrió -- que puede ser antes y no haberse sabido. `IncidenteSeguridad.detectadoEn`
+  es ese momento, y de ahí corre el plazo (`venceEl`, `HORAS_PLAZO_AGENCIA`).
+- **Notificar también a los titulares afectados**, pero sólo si la
+  vulneración implica riesgo alto para sus derechos -- no todo incidente lo
+  activa. `CATEGORIAS_ALTO_RIESGO` marca como alto riesgo la identidad
+  (`rut`), el acceso a la cuenta (`credenciales`) y los antecedentes legales
+  o financieros (`expediente`, `informes`) del registro de tratamiento
+  (`dominio/datos-personales.ts`); el resto -- nombre y contacto, la
+  dirección de una propiedad ya publicada, haber agendado una visita, o que
+  exista un consentimiento -- pesa menos por sí solo. **Esta clasificación es
+  un punto de partida, no una calificación legal verificada**: mismo
+  tratamiento que los plazos de conservación, que también esperan
+  confirmación de un abogado.
+
+Tres decisiones de diseño:
+
+- **El incidente no se cierra solo.** `motivoParaNoCerrar` exige siempre la
+  notificación a la Agencia, y además la de los titulares si alguna
+  categoría afectada es de riesgo alto. `cerrar()` lo vuelve a verificar en
+  el servicio aunque la UI ya deshabilite el botón -- mismo patrón que
+  `acordar()` en la promesa o `validarDocumento` en la escritura: la regla
+  vive donde no se puede saltar, no sólo donde se muestra.
+- **Las notificaciones quedan como fecha, no como casilla.** `notificadaAgenciaEn` /
+  `notificadaTitularesEn` son timestamps, igual que en `PurgaRegistro` y
+  `SolicitudDatos`: lo que se fiscaliza es evidencia fechada de que se
+  cumplió, no un booleano marcado sin prueba de cuándo.
+- **Declarar, notificar y cerrar son admin-only** (`/incidentes`,
+  `exigirRol('admin')` en toda la ruta). Declarar una vulneración de
+  seguridad no es una acción que deba quedar al alcance de cualquier rol
+  interno.
+
+`GET /api/v1/mis-datos/registro` (público) ya expone las categorías del
+registro de tratamiento con su nombre en palabras del titular; el formulario
+de `/incidentes` las reutiliza tal cual para que el admin marque cuáles tocó
+el incidente, en vez de mantener una segunda lista que podría desalinearse.
 
 ## Visitas
 
@@ -882,6 +933,15 @@ PATCH /api/v1/notarias/documentos/:docId/validacion   Bearer, rol notaria  { val
 GET   /api/v1/integraciones/propiedades-pendientes          x-integracion-key  ?tipo=avaluo_fiscal|contribuciones
 PATCH /api/v1/integraciones/propiedades/:id/avaluo-fiscal   x-integracion-key  { avaluoTotal, avaluoExento, avaluoAfecto, vigencia }
 PATCH /api/v1/integraciones/propiedades/:id/contribuciones  x-integracion-key  { cuotas[], totalAdeudadoClp, alDia }
+
+GET   /api/v1/incidentes                       Bearer, rol admin
+POST  /api/v1/incidentes                       Bearer, rol admin  { titulo, descripcion, categoriasAfectadas[], cantidadAfectadaEstimada?, detectadoEn? }
+PATCH /api/v1/incidentes/:id/notificar-agencia Bearer, rol admin
+PATCH /api/v1/incidentes/:id/notificar-titulares Bearer, rol admin
+PATCH /api/v1/incidentes/:id/cerrar            Bearer, rol admin  { medidasAdoptadas }
+  -- categoriasAfectadas usa los códigos de REGISTRO_TRATAMIENTO (GET /mis-datos/registro).
+     cerrar exige notificadaAgenciaEn siempre, y notificadaTitularesEn si alguna categoría es
+     de riesgo alto. Ver "Notificación de brechas de seguridad".
 ```
 
 Datos de prueba de notarías: `npx ts-node --transpile-only src/scripts/seed-socios.ts`

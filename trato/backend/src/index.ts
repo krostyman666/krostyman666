@@ -16,6 +16,7 @@ import pagosRoutes from './routes/pagos.routes';
 import promesasRoutes from './routes/promesas.routes';
 import botRoutes from './routes/bot.routes';
 import integracionesRoutes from './routes/integraciones.routes';
+import brechasRoutes from './routes/brechas.routes';
 import { manejarErrores, rutaNoEncontrada } from './middleware/manejarErrores';
 import './models/Usuario';
 import './models/Propiedad';
@@ -32,6 +33,7 @@ import './models/Promesa';
 import './models/ClausulaPromesa';
 import './models/FirmaPromesa';
 import './models/MensajeBot';
+import './models/IncidenteSeguridad';
 
 const app = express();
 
@@ -62,6 +64,7 @@ app.use('/api/v1/pagos', pagosRoutes);
 app.use('/api/v1/promesas', promesasRoutes);
 app.use('/api/v1/bot', botRoutes);
 app.use('/api/v1/integraciones', integracionesRoutes);
+app.use('/api/v1/incidentes', brechasRoutes);
 
 app.use(rutaNoEncontrada);
 app.use(manejarErrores);
