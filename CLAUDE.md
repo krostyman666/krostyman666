@@ -68,14 +68,43 @@ hay que pasar a migraciones antes del primer deploy.
 - **Next 16 / React 19 / ESLint 9 (flat config)**: proyecto nuevo, sin nada que
   migrar, y cerró un CVE crítico de Next. En producción, `npm audit --omit=dev`
   queda en 0 vulnerabilidades salvo `uuid` (moderada, transitiva de Sequelize,
-  ruta `buf` que no usamos). Incluyendo devDependencies aparece además una
-  cadena de `braces`/`micromatch` (DoS por stack-exhaustion) arrastrada por
-  jest, tailwindcss y ts-node-dev -- no llega a producción, pero arreglarla
-  pide subir de versión mayor esas herramientas, así que queda pendiente de
-  evaluar aparte en vez de forzarla a ciegas. Next mismo se mantuvo al día
-  dentro del propio rango (16.3.5 → 16.3.6) cuando se publicó un RCE crítico
-  en `next/og` (GHSA-vcvr-r3jv-pc5j): ese parche sí se aplicó, porque no pedía
-  ningún cambio de versión mayor.
+  ruta `buf` que no usamos). Next mismo se mantuvo al día dentro del propio
+  rango (16.3.5 → 16.3.6) cuando se publicó un RCE crítico en `next/og`
+  (GHSA-vcvr-r3jv-pc5j): ese parche sí se aplicó, porque no pedía ningún
+  cambio de versión mayor.
+- **La cadena de `braces`/`micromatch` (DoS por stack-exhaustion,
+  GHSA-vfj7-8cjw-p6xm) en devDependencies, resuelta a medias.** `braces`
+  mismo no tiene ninguna versión parchada publicada todavía (su "latest",
+  3.0.3, es justo la versión que el advisory marca vulnerable) -- así que
+  ninguna cantidad de `npm update` la arregla; lo único que sirve es dejar de
+  depender de ella. Jest 29→30 sí lo logra: la rama completa
+  jest-config/jest-haste-map/@jest/core/@jest/transform dejó de usar
+  `micromatch` en el motor nuevo, cero cambios de config necesarios porque
+  todavía no hay tests que pudieran romperse con el bump. `ts-node-dev`
+  (clavado en 2.0.0, sin release más nueva) se reemplazó por `tsx watch` --
+  mismo `--respawn`/transpile-only de siempre, pero sin `chokidar` de por
+  medio; sólo cambia `backend/package.json#scripts.dev`, nada de producción.
+  Bajó de 37 vulnerabilidades (2 moderadas, 35 altas) a 9 (2 moderadas, 7
+  altas). Lo que queda, sin arreglo limpio a la vista:
+  - **`tailwindcss` v3** arrastra `chokidar`/`fast-glob`/`micromatch` para
+    vigilar archivos y expandir `content`. v4 no depende de ninguno de los
+    tres (motor nuevo en Rust), pero es un cambio de versión mayor de
+    verdad: hay que mover `tailwind.config.ts` (los colores `tinta`/`trato`/
+    `cierre`, `fontFamily`, `boxShadow`, `borderRadius`) a un bloque
+    `@theme` en `globals.css`, cambiar `postcss.config.js` al paquete
+    `@tailwindcss/postcss`, reemplazar las tres directivas `@tailwind` por
+    un solo `@import "tailwindcss"`, y mirar la app entera en el navegador
+    después -- v4 cambia algunos valores por defecto (grosor de `ring`,
+    color de borde) que podrían notarse en cualquiera de las ~19 rutas. No
+    se intentó a ciegas en esta pasada; es tarea aparte con su propia
+    verificación visual.
+  - **`eslint-config-next`** trae su propio `@next/eslint-plugin-next`, que
+    fija `fast-glob` -- y eso no lo decidimos nosotros ni lo mueve un
+    `npm update`: ya está en la versión más nueva publicada, atada a la
+    versión de Next que usamos. Se resuelve solo si Next cambia esa
+    dependencia río arriba.
+  - El `uuid`/Sequelize moderado de siempre, sin tocar: forzarlo instala
+    `sequelize@3.30.0`, un downgrade real.
 - **RUT duplicado en `backend/src/utils/rut.ts` y `frontend/src/lib/rut.ts`**: el
   módulo 11 está fijado por ley y no cambia. Se mueve a `shared/` cuando aparezca
   el segundo módulo compartido (probablemente tipos de propiedad o estados de
