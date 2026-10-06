@@ -16,6 +16,7 @@ import { api, mensajeDeError } from '@/lib/api';
 import { useSesion } from '@/hooks/useSesion';
 import FirmarPromesa from '@/components/FirmarPromesa';
 import SeguimientoEscritura from '@/components/SeguimientoEscritura';
+import MinutaEscritura from '@/components/MinutaEscritura';
 import {
   COLOR_ESTADO_PROMESA,
   ETIQUETA_ESTADO_PROMESA,
@@ -317,7 +318,10 @@ export default function NegociarPromesa({ promesaId }: { promesaId: string }) {
       )}
 
       {(promesa.estado === 'firmada' || promesa.estado === 'cumplida') && (
-        <SeguimientoEscritura promesaId={promesa.id} />
+        <>
+          <SeguimientoEscritura promesaId={promesa.id} />
+          <MinutaEscritura promesaId={promesa.id} />
+        </>
       )}
 
       <p className="mt-10 text-xs leading-relaxed text-tinta-tenue">

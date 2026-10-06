@@ -113,6 +113,12 @@ export interface EstadoEscrituraApi {
   propiedadVendida: boolean;
 }
 
+export interface MinutaApi {
+  secciones: { titulo: string; texto: string }[];
+  advertencias: string[];
+  hayCredito: boolean;
+}
+
 export const ETIQUETA_ESTADO_PROMESA: Record<EstadoPromesa, string> = {
   negociando: 'En negociación',
   acordada: 'Acordada',

@@ -135,3 +135,11 @@ export const estadoEscritura: RequestHandler = async (req, res, next) => {
     next(error);
   }
 };
+
+export const minuta: RequestHandler = async (req, res, next) => {
+  try {
+    res.json(await servicio.minuta(req.params.promesaId, exigirAuth(req)));
+  } catch (error) {
+    next(error);
+  }
+};

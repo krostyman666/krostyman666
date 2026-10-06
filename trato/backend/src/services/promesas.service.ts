@@ -17,6 +17,7 @@ import {
   verificar1554,
   type EstadoRequisito,
 } from '../dominio/promesa';
+import { generarMinuta } from '../dominio/minuta';
 
 const ESTADOS_ABIERTOS = ['negociando', 'acordada'];
 
@@ -396,6 +397,47 @@ export async function estadoEscritura(promesaId: string, usuarioId: string) {
     inscripcion: documentos.find((d) => d.codigo === 'inscripcion_dominio')?.toJSON() ?? null,
     propiedadVendida: propiedad.estado === 'vendida',
   };
+}
+
+/**
+ * Borrador de la escritura, armado con lo que el sistema ya tiene: la
+ * promesa, el inmueble y el estado conforme del expediente. No reemplaza al
+ * abogado -- es lo que revisa y completa antes de llevarlo a la notaría. Ver
+ * dominio/minuta.ts.
+ */
+export async function minuta(promesaId: string, usuarioId: string) {
+  const promesa = await cargar(promesaId);
+  exigirParte(promesa, usuarioId);
+  const propiedad = promesa.get('propiedad') as Propiedad;
+  const clausulas = promesa.get('clausulas') as ClausulaPromesa[];
+
+  const [vendedor, comprador, documentos] = await Promise.all([
+    Usuario.findByPk(promesa.vendedorId),
+    Usuario.findByPk(promesa.compradorId),
+    Documento.findAll({ where: { propiedadId: propiedad.id } }),
+  ]);
+  if (!vendedor || !comprador) throw ErrorApi.noEncontrado('Parte de la promesa no encontrada');
+
+  const hayCredito = clausulas.some((c) => c.codigo === 'condicion_credito' && c.aceptadaEn !== null);
+
+  return generarMinuta({
+    vendedor: { nombre: vendedor.nombre, apellido: vendedor.apellido, rut: vendedor.rut },
+    comprador: { nombre: comprador.nombre, apellido: comprador.apellido, rut: comprador.rut },
+    propiedad: {
+      calle: propiedad.calle,
+      numero: propiedad.numero,
+      depto: propiedad.depto,
+      comuna: propiedad.comuna,
+      region: propiedad.region,
+      rolAvaluo: propiedad.rolAvaluo,
+      fojas: propiedad.fojas,
+      numeroInscripcion: propiedad.numeroInscripcion,
+      anoInscripcion: propiedad.anoInscripcion,
+    },
+    promesa: { precio: promesa.precio, moneda: promesa.moneda, pie: promesa.pie },
+    documentos: documentos.map((d) => ({ codigo: d.codigo, conforme: d.conforme, fechaEmision: d.fechaEmision })),
+    hayCredito,
+  });
 }
 
 /** La revisión del abogado antes de la firma. */

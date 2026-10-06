@@ -35,7 +35,7 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Bot de preguntas del comprador, con cola interna de derivaciones | Listo, probado en navegador |
 | Promesa: negociación de cláusulas entre las partes | Listo, probado en navegador |
 | Firma de la promesa por ambas partes | Listo con firma electrónica simple; FEA pendiente de proveedor |
-| Compraventa y escritura | La promesa se cierra sola al aprobar la escritura, y la propiedad pasa a vendida al aprobar la inscripción; falta la minuta de la escritura y el trámite de timbres y estampillas |
+| Compraventa y escritura | La promesa se cierra sola al aprobar la escritura, y la propiedad pasa a vendida al aprobar la inscripción. Borrador de la minuta y calculadora de timbres y estampillas, listos y probados en navegador |
 | Subida de archivos de documentos | Listo, probado en navegador; a disco local hasta conectar S3 |
 | Integraciones externas | Pendiente — ver doc de integraciones |
 
@@ -524,11 +524,45 @@ Nadie acciona nada ahí -- lo que falta lo hace la notaría en su bandeja
 aprobar la inscripción.
 
 No hay negociación de cláusulas acá como en la promesa: los términos de la
-escritura ya los fijó la promesa firmada. Lo que falta armar más adelante es
-la minuta de la escritura misma (quién la redacta, qué cláusulas trae más
-allá de lo que la promesa ya fijó) y el trámite de impuesto de timbres y
-estampillas si hay crédito hipotecario -- hoy el sistema sólo orquesta el
-expediente, no redacta la escritura.
+escritura ya los fijó la promesa firmada.
+
+## La minuta de la escritura y el impuesto de timbres
+
+`backend/src/dominio/minuta.ts`. Lo que `dominio/escritura.ts` deja abierto a
+propósito -- orquesta que la escritura se otorgue, no la redacta -- esto lo
+cierra: un borrador armado con lo que el sistema ya tiene, no un contrato
+listo para firmar. Mismo criterio que las plantillas de cláusulas de la
+promesa: donde falta un dato que no está sistematizado (deslindes, la forma
+exacta del pago del saldo, declaraciones específicas del banco) va un
+marcador `[PENDIENTE: ...]`, nunca un valor inventado -- mismo principio que
+"fuente por conectar" en el informe.
+
+Dos piezas:
+
+- **`generarMinuta`** arma seis secciones (comparecientes, individualización
+  e inscripción, precio y forma de pago, declaraciones sobre el estado del
+  inmueble, entrega, gastos) con los datos de la propiedad y la promesa. La
+  sección de declaraciones es la que más vale: por cada certificado clave del
+  expediente (`dominio_vigente`, `hipotecas_gravamenes`, `deuda_contribuciones`,
+  `no_expropiacion_municipal`) escribe la declaración real con su fecha de
+  emisión si está `conforme`, o un `[PENDIENTE]` explícito si no -- nunca
+  afirma algo que la notaría no validó. `GET /promesas/:id/minuta` (parte de
+  la promesa) la sirve; se ve en la página de la promesa una vez firmada
+  (`MinutaEscritura.tsx`, colapsado por defecto).
+- **`calcularTimbres`** aplica el DL 3.475: 0,066% del monto del crédito por
+  cada mes o fracción hasta el vencimiento, con tope de 0,8% -- que en la
+  práctica es lo que paga cualquier crédito hipotecario, porque ninguno dura
+  menos de 12 meses. El monto del crédito no está en ninguna parte del
+  sistema: nace cuando el banco aprueba, y la promesa lo guarda como texto
+  libre dentro de la cláusula "condición de crédito" (`{monto}`), no como un
+  campo estructurado, así que la función no intenta leerlo de ahí -- lo
+  recibe como parámetro de quien prepara la escritura y ya lo sabe. Por eso
+  es una calculadora, no un dato guardado: la misma fórmula vive duplicada en
+  `frontend/src/lib/timbres.ts` (igual que `rut.ts`, aritmética fija por ley)
+  para que corra en el cliente sin ida y vuelta al servidor. Sólo se muestra
+  si la promesa tiene la cláusula `condicion_credito` aceptada -- esa es la
+  señal estructurada de que hay crédito hipotecario, no un campo nuevo que
+  duplique lo que ya se negoció.
 
 ## El bot de la ficha
 
@@ -885,6 +919,7 @@ PATCH /api/v1/promesas/:id/revision          Bearer, rol abogado
 GET   /api/v1/promesas/:id/firma             Bearer (parte) → contrato, hash, quién firmó
 PATCH /api/v1/promesas/:id/firmar            Bearer (parte) → firma electrónica simple
 GET   /api/v1/promesas/:id/escritura         Bearer (parte) → expediente, escritura e inscripción; solo lectura
+GET   /api/v1/promesas/:id/minuta            Bearer (parte) → borrador de la escritura; ver "La minuta de la escritura"
 
 GET   /api/v1/bot/sugeridas                   público: preguntas de arranque
 GET   /api/v1/bot/propiedad/:id              público: historial de una sesión  ?sesion=
@@ -1038,6 +1073,9 @@ Para la escritura y la inscripción:
   banco si hay crédito): https://www.beckerabogados.cl/en/blog/the-final-hurdles-understanding-the-notary-and-the-conservador-de-bienes-raices/
 - SII, IVA inmuebles tras la reforma tributaria (no aplica entre personas
   naturales salvo venta habitual): https://www.sii.cl/portales/reforma_tributaria/iva_inmuebles.pdf
+- Decreto Ley N° 3.475, impuesto de timbres y estampillas (tasa 0,066%
+  mensual, tope 0,8%, sobre operaciones de crédito de dinero):
+  https://www.sii.cl/normativa_legislacion/timbres.pdf
 
 ## Documentos de estrategia
 
