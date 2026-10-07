@@ -31,7 +31,7 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Derechos del titular: acceso, rectificación, supresión, oposición, portabilidad | Listo, probado en navegador |
 | Registro de actividades de tratamiento y plazos de conservación | Listo; la purga de lo vencido ahora se puede ejecutar (`/datos-vencidos`, admin), aunque sigue siendo un botón que alguien aprieta, no un cron |
 | Notificación de brechas de seguridad en 72 horas | Listo, probado en navegador (`/incidentes`, admin) |
-| Conexión a SII y Tesorería para avalúo y contribuciones | Listo el conector, el nodo de n8n y la carga manual (`/datos-externos`) para cuando el flujo no pueda; falta terminar de armar el flujo (consultar los portales por rol) y correrlo por primera vez |
+| Conexión a SII y Tesorería para avalúo y contribuciones | Listo el conector, el nodo de n8n y la carga manual (`/datos-externos`) para cuando el flujo no pueda. Tesorería: flujo capturado y verificado contra el servicio real, con datos reales de una propiedad; falta instalarlo como workflow en una instancia de n8n con el nodo de Trato. SII: sigue bloqueado por anti-bot |
 | Bot de preguntas del comprador, con cola interna de derivaciones | Listo, probado en navegador |
 | Promesa: negociación de cláusulas entre las partes | Listo, probado en navegador |
 | Firma de la promesa por ambas partes | Listo con firma electrónica simple; FEA pendiente de proveedor |
@@ -368,10 +368,18 @@ documentada, pero ambos son consultables por cualquiera, no sólo por el dueño.
   scrapear un portal público es trabajo de automatización que cambia con el
   HTML del portal, y mezclarlo con el nodo que habla con Trato acopla dos
   cosas que cambian por razones distintas. El README del paquete trae el
-  flujo sugerido y lo que falta configurar: no se pudo capturar la llamada
-  real del portal del SII porque tiene protección anti-bot (queue-it) que
-  bloquea navegadores automatizados, y insistir con reintentos es justo lo
-  que la siguiente advertencia dice no hacer.
+  flujo sugerido y lo que falta configurar. Para Tesorería ya está
+  capturado y verificado: tres llamadas reales contra el API Gateway que usa
+  `contribuciones.tgr.cl` (identificar por rol, pedir la deuda con el token
+  de sesión del paso anterior, y antes la lista de comunas), probadas contra
+  el servicio real con una propiedad real. El obstáculo ahí no era anti-bot
+  sino un reCAPTCHA v3 invisible en el primer paso -- lo resuelve solo
+  cualquier navegador real que ejecute el JavaScript de Google, así que hace
+  falta un nodo de automatización de navegador (Browserbase o un community
+  node de Puppeteer/Playwright), no un HTTP Request puro, sólo para ese
+  primer paso. Para el SII sigue sin poderse: su portal tiene protección
+  anti-bot (queue-it) que bloquea navegadores automatizados, y insistir con
+  reintentos es justo lo que la siguiente advertencia dice no hacer.
 - **Cuando el flujo no puede, alguien del equipo puede.** `/datos-externos`
   (rol admin o asesor) muestra la misma cola de pendientes y deja llenar el
   avalúo fiscal o las cuotas de contribuciones a mano, propiedad por
