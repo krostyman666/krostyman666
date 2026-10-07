@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   IVA,
   TASA_TRATO,
@@ -10,6 +10,7 @@ import {
   formatearCLP,
   type Moneda,
 } from '@/lib/comision';
+import { obtenerUf } from '@/lib/uf';
 
 const VALOR_INICIAL: Record<Moneda, number> = { clp: 350_000_000, uf: 9000 };
 
@@ -19,8 +20,16 @@ export default function CalculadoraAhorro() {
   const [moneda, setMoneda] = useState<Moneda>('clp');
   const [valor, setValor] = useState<number>(VALOR_INICIAL.clp);
   const [tasaCorredor, setTasaCorredor] = useState<number>(0.02);
+  const [uf, setUf] = useState<{ valorClp: number; esValorDelDia: boolean }>({
+    valorClp: UF_FALLBACK_CLP,
+    esValorDelDia: false,
+  });
 
-  const valorEnPesos = aPesos(valor, moneda, UF_FALLBACK_CLP);
+  useEffect(() => {
+    obtenerUf().then((u) => setUf({ valorClp: u.valorClp, esValorDelDia: u.fuente === 'mindicador' }));
+  }, []);
+
+  const valorEnPesos = aPesos(valor, moneda, uf.valorClp);
   const d = useMemo(
     () => calcularComision(valorEnPesos, tasaCorredor, TASA_TRATO),
     [valorEnPesos, tasaCorredor],
@@ -86,7 +95,8 @@ export default function CalculadoraAhorro() {
       </div>
       {moneda === 'uf' && (
         <p className="mt-2 text-xs text-tinta-tenue">
-          Equivale a {formatearCLP(valorEnPesos)} · UF referencial {formatearCLP(UF_FALLBACK_CLP)}
+          Equivale a {formatearCLP(valorEnPesos)} · UF {uf.esValorDelDia ? 'de hoy' : 'referencial'}{' '}
+          {formatearCLP(uf.valorClp)}
         </p>
       )}
 

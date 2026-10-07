@@ -135,8 +135,23 @@ hay que pasar a migraciones antes del primer deploy.
   y falla al arrancar si falta `DATABASE_URL` o `JWT_SECRET`.
 - **Calculadora sólo compara comisión de corretaje.** Notaría, Conservador e
   hipotecario se mencionan pero no se estiman: no inventamos cifras legales.
-- **UF**: `UF_FALLBACK_CLP` en `frontend/src/lib/comision.ts` es un placeholder.
-  Conectar a mindicador.cl antes de producción.
+- **UF conectada a mindicador.cl, con caché y fallback.** `backend/src/services/uf.service.ts`
+  consulta `GET /api/v1/uf` (público, sin sesión) y cachea el resultado en memoria
+  del proceso por 6 horas -- la UF cambia una vez al día, así que no hace falta
+  más fresco. Si mindicador.cl no responde, sirve el último valor cacheado
+  aunque esté vencido (sigue siendo una UF real y reciente); sólo cae al
+  `UF_FALLBACK_CLP` fijo (`env.uf.fallbackClp`, `.env`) si el proceso nunca
+  logró una consulta exitosa desde que arrancó. `frontend/src/lib/uf.ts` pide
+  ese endpoint (no mindicador.cl directo, mismo principio que avalúo fiscal y
+  contribuciones: el backend es la única fuente de datos externos) y lo cachea
+  también en memoria del módulo para no repetir la consulta en cada render.
+  `CalculadoraAhorro.tsx` (la única que usaba `UF_FALLBACK_CLP`) ahora muestra
+  "UF de hoy" cuando el valor es real y "UF referencial" cuando cae a cualquiera
+  de los dos fallbacks -- mismo principio que "fuente por conectar" en el
+  informe: no se finge que un número fijo es el del día. Verificado en
+  navegador con el backend real (UF de hoy, $41.106 al momento de escribir
+  esto) y con el backend caído (cae a la UF referencial fija sin romper la
+  página).
 - **Mapa de una propiedad (`MapaPropiedad`): iframe de OpenStreetMap**, sin
   dependencia ni API key. Alcanza para un solo punto.
 - **Mapa de resultados (`MapaResultados`, en `/propiedades`): dos proveedores.**
@@ -1006,6 +1021,9 @@ PATCH /api/v1/incidentes/:id/cerrar            Bearer, rol admin  { medidasAdopt
   -- categoriasAfectadas usa los códigos de REGISTRO_TRATAMIENTO (GET /mis-datos/registro).
      cerrar exige notificadaAgenciaEn siempre, y notificadaTitularesEn si alguna categoría es
      de riesgo alto. Ver "Notificación de brechas de seguridad".
+
+GET   /api/v1/uf                               público: UF del día (valorClp, fecha, fuente), vía
+                                                 mindicador.cl con caché y fallback -- ver "Decisiones tomadas"
 ```
 
 Datos de prueba de notarías: `npx ts-node --transpile-only src/scripts/seed-socios.ts`

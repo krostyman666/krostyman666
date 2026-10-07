@@ -96,6 +96,18 @@ export const env = {
   integracion: {
     apiKey: process.env.INTEGRACION_API_KEY ?? '',
   },
+
+  /**
+   * UF del día, para la calculadora de ahorro de la landing. `fallbackClp` sólo
+   * se usa si mindicador.cl nunca respondió desde que arrancó el proceso (ni
+   * siquiera hay un valor cacheado de antes); mientras haya uno en caché, se
+   * sirve ese aunque esté vencido -- sigue siendo una UF real y reciente, mejor
+   * que un número fijo. Ver `services/uf.service.ts`.
+   */
+  uf: {
+    apiUrl: process.env.UF_API_URL ?? 'https://mindicador.cl/api/uf',
+    fallbackClp: Number(process.env.UF_FALLBACK_CLP ?? 39_000),
+  },
 } as const;
 
 export function cuentaDeCobroConfigurada(): boolean {
