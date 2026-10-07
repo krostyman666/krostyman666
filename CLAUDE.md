@@ -1032,8 +1032,19 @@ el propio motor de `Intl` del runtime, no a ojo), `dominio/documentos.catalogo.t
 `dominio/escritura.ts`, `dominio/brechas.ts`, `dominio/promesa.ts` (el artículo
 1554 completo) y `dominio/minuta.ts` (timbres y estampillas, DL 3.475). Los
 archivos de test están al lado del código que prueban (`foo.ts` + `foo.test.ts`),
-no en una carpeta aparte. El frontend sigue sin tests, pero el runner (vitest)
-está listo para cuando se escriban.
+no en una carpeta aparte.
+
+**El frontend también**: vitest, sin config propio -- corre la lógica pura en
+TypeScript directo, sin necesitar resolver el alias `@/` porque los tests
+importan con ruta relativa, igual que el backend. Cubre la aritmética
+duplicada del lado del cliente que `rut.ts` y `timbres.ts` ya explican por
+qué existe (ley fija, corre sin ida y vuelta al servidor): `lib/rut.ts`,
+`lib/timbres.ts` (mismos DL 3.475 ya verificados en el backend) y
+`lib/comision.ts` (el desglose que arma la calculadora de ahorro de la
+landing). Componentes de React y los que hablan con `fetch` (`lib/api.ts` y
+el resto de `lib/*.ts`) se quedan sin cubrir por ahora: requieren mockear
+React Testing Library o `fetch`, otro nivel de esfuerzo que esta primera
+pasada no incluyó.
 
 **Ningún valor de prueba se inventa.** Un dígito verificador de RUT o un
 instante UTC de un cambio de hora no se escribe a ojo: se calcula con el mismo
