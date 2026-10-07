@@ -1015,8 +1015,24 @@ npm run build -w @trato/backend && npm run build -w @trato/frontend
 
 Para cambios de UI: levantar y mirarlo en el navegador, no sólo compilar.
 
-No hay tests todavía, pero el runner está listo para cuando se escriban: jest en
-el backend (`--passWithNoTests` mientras tanto) y vitest en el frontend.
+**El backend ya tiene tests**: jest, con `jest.config.js` nuevo
+(`preset: 'ts-jest'`, `testMatch` sobre `src/**/*.test.ts`). Cubren los módulos
+de dominio puro -- sin base de datos, sin mocks -- que concentran las reglas
+legales del proyecto: `utils/rut.ts`, `utils/geo.ts`, `utils/tiempo.ts` (ida y
+vuelta de zona horaria y los dos cambios de hora de 2026, verificados contra
+el propio motor de `Intl` del runtime, no a ojo), `dominio/documentos.catalogo.ts`,
+`dominio/escritura.ts`, `dominio/brechas.ts`, `dominio/promesa.ts` (el artículo
+1554 completo) y `dominio/minuta.ts` (timbres y estampillas, DL 3.475). Los
+archivos de test están al lado del código que prueban (`foo.ts` + `foo.test.ts`),
+no en una carpeta aparte. El frontend sigue sin tests, pero el runner (vitest)
+está listo para cuando se escriban.
+
+**Ningún valor de prueba se inventa.** Un dígito verificador de RUT o un
+instante UTC de un cambio de hora no se escribe a ojo: se calcula con el mismo
+algoritmo que el código bajo prueba, o se confirma contra una fuente externa
+(el motor de zonas horarias del runtime, en el caso de `tiempo.ts`), y sólo
+entonces se pega como fixture. Mismo principio que "no inventamos cifras
+legales" aplicado a los tests.
 
 ```bash
 npm test -w @trato/backend                     # jest
