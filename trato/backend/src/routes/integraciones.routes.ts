@@ -19,5 +19,6 @@ router.patch(
   validarCuerpo(contribucionesSchema),
   controlador.guardarContribuciones,
 );
+router.post('/avisos-vencimiento', controlador.avisosVencimiento);
 
 export default router;

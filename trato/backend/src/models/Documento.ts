@@ -50,6 +50,15 @@ export class Documento extends Model<
   declare validadoEn: CreationOptional<Date | null>;
   declare observacionNotaria: CreationOptional<string | null>;
 
+  /**
+   * Cuándo se avisó al vendedor que este certificado está por vencer o ya
+   * venció. Null significa que corresponde avisar si cae dentro de la
+   * ventana; una vez avisado no se repite el correo para el mismo papel --
+   * lo limpia el hook de abajo en cuanto se reemplaza por uno nuevo, igual
+   * que la validación.
+   */
+  declare avisadoVencimientoEn: CreationOptional<Date | null>;
+
   declare createdAt: CreationOptional<Date>;
   declare updatedAt: CreationOptional<Date>;
 
@@ -117,6 +126,7 @@ Documento.init(
     validadoPorId: { type: DataTypes.UUID, allowNull: true },
     validadoEn: { type: DataTypes.DATE, allowNull: true },
     observacionNotaria: { type: DataTypes.TEXT, allowNull: true },
+    avisadoVencimientoEn: { type: DataTypes.DATE, allowNull: true },
     createdAt: DataTypes.DATE,
     updatedAt: DataTypes.DATE,
   },
@@ -134,6 +144,9 @@ Documento.init(
 
 // Si cambia el archivo o la fecha de emisión, es otro papel: lo que la notaría
 // aprobó antes ya no es lo que está en el expediente, así que vuelve a revisión.
+// El aviso de vencimiento también se limpia: el papel nuevo tiene su propia
+// fecha y puede no estar ni cerca de vencer, así que no corresponde seguir
+// arrastrando que ya se avisó del anterior.
 Documento.addHook('beforeUpdate', (documento) => {
   const doc = documento as Documento;
   const reemplazado = doc.changed('archivoUrl') || doc.changed('fechaEmision');
@@ -142,6 +155,9 @@ Documento.addHook('beforeUpdate', (documento) => {
     doc.set('validadoPorId', null);
     doc.set('validadoEn', null);
     doc.set('observacionNotaria', null);
+  }
+  if (reemplazado && !doc.changed('avisadoVencimientoEn')) {
+    doc.set('avisadoVencimientoEn', null);
   }
 });
 

@@ -108,6 +108,19 @@ export const env = {
     apiUrl: process.env.UF_API_URL ?? 'https://mindicador.cl/api/uf',
     fallbackClp: Number(process.env.UF_FALLBACK_CLP ?? 39_000),
   },
+
+  /**
+   * Correo saliente (avisos de vencimiento de certificados, por ahora). Sin
+   * `SMTP_HOST` el envío no se intenta: se registra y se dice, no se finge.
+   * Mismo patrón que `sii.proveedor: 'ninguno'`.
+   */
+  email: {
+    smtpHost: process.env.SMTP_HOST ?? '',
+    smtpPort: Number(process.env.SMTP_PORT ?? 587),
+    smtpUser: process.env.SMTP_USER ?? '',
+    smtpPassword: process.env.SMTP_PASSWORD ?? '',
+    from: process.env.EMAIL_FROM ?? 'Trato <no-responder@trato.cl>',
+  },
 } as const;
 
 export function cuentaDeCobroConfigurada(): boolean {

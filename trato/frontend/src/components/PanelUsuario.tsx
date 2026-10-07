@@ -81,6 +81,12 @@ export default function PanelUsuario() {
               >
                 Avalúo y contribuciones
               </Link>
+              <Link
+                href="/avisos-vencimiento"
+                className="rounded-lg px-3 py-2 text-sm font-medium text-tinta-suave transition hover:bg-tinta/5 hover:text-tinta"
+              >
+                Avisos de vencimiento
+              </Link>
             </>
           )}
           {usuario.rol === 'admin' && (

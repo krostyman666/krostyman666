@@ -37,6 +37,7 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Firma de la promesa por ambas partes | Listo con firma electrónica simple; FEA pendiente de proveedor |
 | Compraventa y escritura | La promesa se cierra sola al aprobar la escritura, y la propiedad pasa a vendida al aprobar la inscripción. Borrador de la minuta y calculadora de timbres y estampillas, listos y probados en navegador |
 | Subida de archivos de documentos | Listo, probado en navegador; a disco local hasta conectar S3 |
+| Aviso de vencimiento de certificados por correo | Listo, probado en navegador con un SMTP real de prueba; sin credenciales SMTP en `.env`, el envío se intenta y se reporta como no enviado -- no se simula |
 | Integraciones externas | Pendiente — ver doc de integraciones |
 
 ## Estructura
@@ -253,6 +254,39 @@ El driver es `local` y escribe al disco del backend, que alcanza para
 desarrollo. En producción hay que pasar a S3 (llaves ya reservadas): el disco
 del contenedor es efímero y no se comparte entre instancias. El resto del código
 habla con `almacenamiento`, no con el disco, para que ese cambio sea un archivo.
+
+### Aviso de vencimiento por correo
+
+`backend/src/services/avisos-vencimiento.service.ts`. La fricción que el
+catálogo de documentos ya nombra como motivo de ser de la plataforma -- "los
+certificados vencen, hay que pedirlos de nuevo" -- se quedaba sin nadie que
+avisara: `Documento.vencido` y `diasParaVencer` ya calculaban esto para un
+papel individual, pero nada juntaba los que están por vencer en todo el
+expediente para avisarle al vendedor antes de que lo descubra recién al
+escriturar.
+
+- **No se repite el aviso para el mismo papel.** `Documento.avisadoVencimientoEn`
+  queda marcado una vez enviado el correo, y sólo se limpia si el vendedor sube
+  un documento nuevo (mismo hook `beforeUpdate` que ya resetea la validación al
+  reemplazar un archivo). Sin esto, un certificado vencido que nadie reemplaza
+  mandaría un correo cada vez que esto se corre.
+- **Sin SMTP configurado, no se finge un envío.** `backend/src/services/email.service.ts`
+  no intenta nada si `SMTP_HOST` está vacío -- devuelve `{enviado: false,
+  motivo: 'smtp_no_configurado'}`, mismo principio que `sii.proveedor:
+  'ninguno'`. El documento no queda marcado como avisado si el correo no salió
+  de verdad: sigue apareciendo en la lista hasta que haya un proveedor real.
+- **Dos formas de disparar el mismo envío.** `GET/POST /api/v1/avisos-vencimiento`
+  (JWT, admin o asesor) es para mirar la lista y mandar a mano, como
+  `/datos-vencidos`. `POST /api/v1/integraciones/avisos-vencimiento`
+  (`x-integracion-key`) llama exactamente a la misma función, pensado para un
+  Schedule Trigger de n8n -- a diferencia de Tesorería o el SII, esto no
+  depende de ningún portal externo ni necesita navegador: un POST diario
+  alcanza.
+- Verificado de punta a punta en navegador: con un servidor SMTP de prueba
+  (`python3 -m smtpd`) el correo llegó con el texto correcto y los documentos
+  quedaron marcados; con `SMTP_HOST` vacío (el default de `.env.example`) la
+  página avisa "no se pudo enviar" en vez de reportar éxito, y los documentos
+  siguen en la lista para el próximo intento.
 
 ## La ficha pública y el límite con el expediente
 
@@ -1012,6 +1046,10 @@ PATCH /api/v1/notarias/documentos/:docId/validacion   Bearer, rol notaria  { val
 GET   /api/v1/integraciones/propiedades-pendientes          x-integracion-key  ?tipo=avaluo_fiscal|contribuciones
 PATCH /api/v1/integraciones/propiedades/:id/avaluo-fiscal   x-integracion-key  { avaluoTotal, avaluoExento, avaluoAfecto, vigencia }
 PATCH /api/v1/integraciones/propiedades/:id/contribuciones  x-integracion-key  { cuotas[], totalAdeudadoClp, alDia }
+POST  /api/v1/integraciones/avisos-vencimiento               x-integracion-key  -- misma función que abajo, para un Schedule Trigger de n8n
+
+GET   /api/v1/avisos-vencimiento               Bearer, rol admin|asesor  → propiedades con certificados por vencer o vencidos
+POST  /api/v1/avisos-vencimiento               Bearer, rol admin|asesor  → envía los correos; ver "Aviso de vencimiento por correo"
 
 GET   /api/v1/incidentes                       Bearer, rol admin
 POST  /api/v1/incidentes                       Bearer, rol admin  { titulo, descripcion, categoriasAfectadas[], cantidadAfectadaEstimada?, detectadoEn? }
