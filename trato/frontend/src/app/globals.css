@@ -1,6 +1,36 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@theme {
+  --color-tinta: #0f1b2d;
+  --color-tinta-suave: #3d4a5c;
+  --color-tinta-tenue: #6b7684;
+
+  --color-trato-50: #eef6ff;
+  --color-trato-100: #d9ebff;
+  --color-trato-200: #bcdbff;
+  --color-trato-300: #8ec4ff;
+  --color-trato-400: #59a3ff;
+  --color-trato-500: #2f80ff;
+  --color-trato-600: #1a5fe0;
+  --color-trato-700: #164bb5;
+  --color-trato-800: #173f8f;
+  --color-trato-900: #183872;
+
+  --color-cierre-50: #ecfdf3;
+  --color-cierre-100: #d1fadf;
+  --color-cierre-400: #34d399;
+  --color-cierre-500: #10b981;
+  --color-cierre-600: #059669;
+  --color-cierre-700: #047857;
+
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+
+  --shadow-carta: 0 1px 2px rgba(15, 27, 45, 0.04), 0 8px 24px -12px rgba(15, 27, 45, 0.12);
+  --shadow-alta: 0 2px 4px rgba(15, 27, 45, 0.04), 0 16px 40px -16px rgba(15, 27, 45, 0.18);
+
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1.25rem;
+}
 
 @layer base {
   html {

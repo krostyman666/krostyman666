@@ -4,7 +4,10 @@ import './globals.css';
 
 const inter = Inter({
   subsets: ['latin'],
-  variable: '--font-sans',
+  // No se llama --font-sans: el tema de Tailwind v4 define su propia
+  // variable --font-sans en globals.css, y si Next inyectara una con el
+  // mismo nombre quedaría referenciándose a sí misma.
+  variable: '--font-inter',
   display: 'swap',
 });
 

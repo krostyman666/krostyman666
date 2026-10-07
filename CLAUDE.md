@@ -44,7 +44,7 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 ```
 trato/
 ├── backend/           API REST — Express 4 + Sequelize 6 + PostgreSQL
-├── frontend/          Next.js 16 (App Router) + React 19 + Tailwind 3
+├── frontend/          Next.js 16 (App Router) + React 19 + Tailwind 4
 ├── n8n-nodes-trato/   Nodo custom de n8n; paquete propio, fuera de los workspaces de npm
 ├── shared/            vacío; se cablea cuando haya un 2º módulo compartido
 ├── infrastructure/
@@ -74,36 +74,57 @@ hay que pasar a migraciones antes del primer deploy.
   (GHSA-vcvr-r3jv-pc5j): ese parche sí se aplicó, porque no pedía ningún
   cambio de versión mayor.
 - **La cadena de `braces`/`micromatch` (DoS por stack-exhaustion,
-  GHSA-vfj7-8cjw-p6xm) en devDependencies, resuelta a medias.** `braces`
-  mismo no tiene ninguna versión parchada publicada todavía (su "latest",
-  3.0.3, es justo la versión que el advisory marca vulnerable) -- así que
-  ninguna cantidad de `npm update` la arregla; lo único que sirve es dejar de
-  depender de ella. Jest 29→30 sí lo logra: la rama completa
-  jest-config/jest-haste-map/@jest/core/@jest/transform dejó de usar
-  `micromatch` en el motor nuevo, cero cambios de config necesarios porque
-  todavía no hay tests que pudieran romperse con el bump. `ts-node-dev`
-  (clavado en 2.0.0, sin release más nueva) se reemplazó por `tsx watch` --
-  mismo `--respawn`/transpile-only de siempre, pero sin `chokidar` de por
-  medio; sólo cambia `backend/package.json#scripts.dev`, nada de producción.
-  Bajó de 37 vulnerabilidades (2 moderadas, 35 altas) a 9 (2 moderadas, 7
-  altas). Lo que queda, sin arreglo limpio a la vista:
-  - **`tailwindcss` v3** arrastra `chokidar`/`fast-glob`/`micromatch` para
-    vigilar archivos y expandir `content`. v4 no depende de ninguno de los
-    tres (motor nuevo en Rust), pero es un cambio de versión mayor de
-    verdad: hay que mover `tailwind.config.ts` (los colores `tinta`/`trato`/
-    `cierre`, `fontFamily`, `boxShadow`, `borderRadius`) a un bloque
-    `@theme` en `globals.css`, cambiar `postcss.config.js` al paquete
-    `@tailwindcss/postcss`, reemplazar las tres directivas `@tailwind` por
-    un solo `@import "tailwindcss"`, y mirar la app entera en el navegador
-    después -- v4 cambia algunos valores por defecto (grosor de `ring`,
-    color de borde) que podrían notarse en cualquiera de las ~19 rutas. No
-    se intentó a ciegas en esta pasada; es tarea aparte con su propia
-    verificación visual.
+  GHSA-vfj7-8cjw-p6xm) en devDependencies, resuelta en dos pasadas.**
+  `braces` mismo no tiene ninguna versión parchada publicada todavía (su
+  "latest", 3.0.3, es justo la versión que el advisory marca vulnerable) --
+  así que ninguna cantidad de `npm update` la arregla; lo único que sirve es
+  dejar de depender de ella. Primera pasada: jest 29→30 (dejó de usar
+  `micromatch` en el motor nuevo) y `ts-node-dev` (clavado en 2.0.0) →
+  `tsx watch` (mismo `--respawn`/transpile-only, sin `chokidar`). Segunda
+  pasada: **tailwindcss v3→v4**, que elimina la última dependencia real del
+  proyecto en esta cadena -- el motor nuevo de v4 no usa `chokidar`,
+  `fast-glob` ni `micromatch` para nada. La migración fue sin sorpresas
+  porque el código ya no dependía de ningún color/borde/ring por defecto de
+  Tailwind (todo el proyecto usa clases explícitas, `border-tinta/10`,
+  `ring-trato-500`, etc., nunca `border` o `ring` a secas) -- verificado con
+  grep antes de migrar y confirmado comparando capturas de pantalla
+  antes/después en cuatro rutas representativas, pixel por pixel iguales.
+  Cambios: `tailwind.config.ts` se eliminó, sus colores (`tinta`/`trato`/
+  `cierre`), `fontFamily`, `boxShadow` y `borderRadius` pasaron a un bloque
+  `@theme` en `globals.css`; `postcss.config.js` usa `@tailwindcss/postcss`
+  en vez de `tailwindcss` + `autoprefixer` (v4 trae el prefijado de
+  vendedores incluido); las tres directivas `@tailwind` se reemplazaron por
+  `@import "tailwindcss"`. Un detalle no obvio: la variable CSS que inyecta
+  `next/font` se llamaba `--font-sans`, el mismo nombre que usa el tema de
+  v4 para la utilidad `font-sans` -- de haberlas dejado iguales, la del tema
+  habría quedado referenciándose a sí misma. Se renombró la de `next/font` a
+  `--font-inter` (`app/layout.tsx`).
+
+  **De regalo, al instalar aparecieron tres hallazgos nuevos (no causados
+  por esta migración: ya estaban clavados con esas versiones exactas en el
+  lockfile commiteado antes de tocar nada, confirmado contra `git show
+  HEAD:...`) con parche ya publicado y dentro del rango que sus propios
+  `package.json` ya permitían -- un `npm update` sin ningún cambio de
+  versión mayor los resolvió:**
+  - `sharp` (óptimo de imágenes de Next) 0.35.4 → 0.35.5, cierra un CVE en
+    su dependencia `librsvg`.
+  - `shell-quote` (de `concurrently`, el runner de `npm run dev`) 1.10.0 →
+    1.12.0, cierra una inyección de comandos **crítica** por `quote()`.
+  - `source-map-js` (de `postcss`) 1.2.1 → 1.2.2, cierra un DoS por offsets
+    de sourcemap.
+
+  Lo que queda, sin arreglo limpio a la vista:
   - **`eslint-config-next`** trae su propio `@next/eslint-plugin-next`, que
-    fija `fast-glob` -- y eso no lo decidimos nosotros ni lo mueve un
-    `npm update`: ya está en la versión más nueva publicada, atada a la
-    versión de Next que usamos. Se resuelve solo si Next cambia esa
-    dependencia río arriba.
+    fija `fast-glob` → `micromatch` → `braces` -- y eso no lo decidimos
+    nosotros ni lo mueve un `npm update`: ya está en la versión más nueva
+    publicada, atada a la versión de Next que usamos. Se resuelve solo si
+    Next cambia esa dependencia río arriba.
+  - **`sprintf-js`**, igual que `braces`: su "latest" (1.1.3) es la versión
+    que el advisory marca vulnerable, sin parche publicado. Llega por una
+    cadena larga y de bajo riesgo real (`ts-jest` → `babel-plugin-istanbul`
+    → `js-yaml` 3.x, instrumentación de cobertura de tests que nunca procesa
+    input no confiable), así que no vale la pena perseguir un salto de
+    versión mayor en `argparse`/`js-yaml` sólo por esto.
   - El `uuid`/Sequelize moderado de siempre, sin tocar: forzarlo instala
     `sequelize@3.30.0`, un downgrade real.
 - **RUT duplicado en `backend/src/utils/rut.ts` y `frontend/src/lib/rut.ts`**: el
