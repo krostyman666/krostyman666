@@ -31,7 +31,7 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Derechos del titular: acceso, rectificación, supresión, oposición, portabilidad | Listo, probado en navegador |
 | Registro de actividades de tratamiento y plazos de conservación | Listo; la purga de lo vencido ahora se puede ejecutar (`/datos-vencidos`, admin), aunque sigue siendo un botón que alguien aprieta, no un cron |
 | Notificación de brechas de seguridad en 72 horas | Listo, probado en navegador (`/incidentes`, admin) |
-| Conexión a SII y Tesorería para avalúo y contribuciones | Listo el conector y la carga manual (`/datos-externos`), que es la vía real hoy. Tesorería: workflow de n8n con arquitectura asíncrona (Firecrawl Agent: arranque + sondeo corto repetido) **probado en vivo contra el servicio real y funcionando de punta a punta** (ROL 711-59, Las Condes); guardado, sin activar todavía por falta de un backend público donde apuntar `baseUrl`. SII: sigue bloqueado por anti-bot |
+| Conexión a SII y Tesorería para avalúo y contribuciones | Listo el conector y la carga manual (`/datos-externos`), que es la vía real hoy. Tesorería: workflow de n8n con arquitectura asíncrona (Firecrawl Agent: arranque + sondeo corto repetido) **probado en vivo contra el servicio real y funcionando de punta a punta** (ROL 711-59, Las Condes). El backend ya tiene URL pública (`https://trato-backend.vercel.app/api/v1`, ver "Despliegue del backend en Vercel") y `Config.baseUrl` ya apunta ahí; falta crear la credencial de la API key en n8n y activar el workflow, ver la nota adhesiva del propio workflow. SII: sigue bloqueado por anti-bot |
 | Bot de preguntas del comprador, con cola interna de derivaciones | Listo, probado en navegador |
 | Promesa: negociación de cláusulas entre las partes | Listo, probado en navegador |
 | Firma de la promesa por ambas partes | Listo con firma electrónica simple; FEA pendiente de proveedor |
@@ -156,24 +156,24 @@ hay que pasar a migraciones antes del primer deploy.
     (`esRutValido`/`formatearRut` vía `@trato/shared`) y la calculadora de
     timbres de una promesa firmada con crédito calcula bien (UF 90.000.000 a
     240 meses → tasa 0,8%, $720.000, el mismo fixture que el test).
-  - **Pendiente antes de un primer despliegue real del backend compilado.**
-    `shared` no tiene build propio: sirve su `.ts` tal cual, que es lo que
-    hace posible la resolución de arriba sin fricción en desarrollo. Eso
-    funciona para todo lo que ya se verificó (dev, tests, `next build`) porque
-    esas herramientas compilan TypeScript al vuelo. Pero `npm run build -w
-    @trato/backend` + `node dist/index.js` -- el camino de producción que este
-    proyecto todavía no ha ejercitado ni una vez, ver la nota de migraciones
-    más abajo -- fallaría: `tsc` no reescribe el `require("@trato/shared")`
-    emitido, y Node en runtime puro no sabe convertir TypeScript a JS al
-    resolver el `main` del paquete (confirmado: falla con
-    `ERR_MODULE_NOT_FOUND` incluso con el *type stripping* nativo de Node 22,
-    porque esa función exige extensión explícita en cada import relativo, y
-    usarla obligaría a `allowImportingTsExtensions` en todos los `tsconfig.json`
-    que tocan `shared`, no sólo el suyo). Antes de ese primer despliegue hay
-    que darle a `shared` un build real (`tsc` a `dist/`, `main`/`types`
-    apuntando ahí) y decidir cómo no perder la recarga en caliente en
-    desarrollo -- la misma categoría de pendiente que S3 para archivos o
-    migraciones para el esquema.
+  - **Resuelto: `shared` ya tiene build propio.** Servir su `.ts` tal cual
+    alcanzaba para dev/tests/`next build` porque esas herramientas compilan
+    TypeScript al vuelo, pero `npm run build -w @trato/backend` + `node
+    dist/index.js` fallaba con `ERR_MODULE_NOT_FOUND`: `tsc` no reescribe el
+    `require("@trato/shared")` emitido, y Node en runtime puro no sabe
+    convertir TypeScript a JS al resolver el `main` del paquete.
+    `shared/package.json` ahora apunta `main`/`types` a
+    `./dist/index.js`/`./dist/index.d.ts`, con
+    un `tsconfig.build.json` propio (`noEmit:false`, `outDir: ./dist`) y
+    scripts `build`/`dev` (`tsc -p tsconfig.build.json [--watch]`). Los
+    scripts raíz (`dev`/`build`/`test`) construyen `@trato/shared` antes de
+    tocar `backend`/`frontend`, así que el hot-reload de desarrollo no se
+    perdió: `tsx watch` y Next siguen viendo el `.ts` fuente vía el symlink
+    para todo lo demás, y sólo el build de producción usa el `dist/`
+    compilado. Verificado de punta a punta: `node dist/index.js` del backend
+    corriendo contra una base de datos real, y el mismo mecanismo probado
+    también dentro del bundle serverless de Vercel (ver "Despliegue del
+    backend en Vercel" más abajo).
 - **`.env` en la raíz del monorepo**; `backend/src/config/env.ts` lo carga por ruta
   y falla al arrancar si falta `DATABASE_URL` o `JWT_SECRET`.
 - **Calculadora sólo compara comisión de corretaje.** Notaría, Conservador e
@@ -224,6 +224,67 @@ hay que pasar a migraciones antes del primer deploy.
   `eslint src`. Al encenderlo apareció `react-hooks/set-state-in-effect` en
   todo el proyecto: quedó en `warn` porque la salida es mover las cargas a
   react-query (ya está en las dependencias, sin usar), no un disable por archivo.
+
+## Despliegue del backend en Vercel
+
+El backend corre en producción como función serverless de Vercel
+(proyecto `trato-backend`, dominio `https://trato-backend.vercel.app`), con
+Postgres en Neon (proyecto `trato-production`, `old-mountain-08762791`,
+región `aws-sa-east-1`) en vez de Supabase -- Supabase se descartó a mitad de
+camino porque la cuenta ya estaba en el tope de 2 proyectos del plan free
+(ocupado por otro proyecto del dueño) y la alternativa elegida fue cambiar de
+proveedor, no pausar o pagar por ese otro proyecto.
+
+- **`backend/api/index.ts`** es el entrypoint que Vercel detecta como función
+  Node.js (`handler(req, res)`, zero-config sobre `api/*.ts`). Llama a
+  `conectarBaseDatos()` una vez (memoizado en el scope del módulo, para
+  reusar la conexión entre invocaciones del mismo contenedor) y delega en la
+  app de Express de siempre (`src/index.ts`) -- el código de rutas no sabe
+  que corre en Vercel.
+- **`backend/vercel.json`**: `framework: null` (el preset `"express"` activa
+  un pipeline de build distinto -- trata el proyecto como app completa, no
+  como función + rewrites -- y rompió el build con un error de `tsc` que no
+  tenía que ver con la causa real; nunca usar ese preset acá).
+  `outputDirectory: "public"` con un `public/.gitkeep` vacío, porque con
+  `framework: null` Vercel espera una salida estática aunque no sirva
+  ninguna. `rewrites` manda todo a `/api`, que es donde vive la función.
+- **`buildCommand` copia `@trato/shared` compilado a mano dentro de
+  `backend/node_modules/@trato/shared/`, no symlinkeado.** Es la parte menos
+  obvia de todo este despliegue. `npm install` en la raíz del monorepo
+  resuelve `@trato/shared` con un symlink, pero npm workspaces lo hoistea al
+  `node_modules` de la RAÍZ (`trato/node_modules/@trato/shared -> ../shared`),
+  nunca al de `backend/`. El Root Directory del proyecto Vercel es
+  `trato/backend`, así que el empaquetador de la función (basado en esbuild,
+  traza imports estáticos) nunca sube a buscar en el `node_modules` del
+  padre y la función revienta en runtime con `Cannot find module
+  '@trato/shared'` aunque el build local funcione perfecto. Ni un
+  `functions.includeFiles` apuntando a `../shared/dist/**` alcanza (copia
+  archivos sueltos, no resuelve el `require`). La solución real: el
+  `buildCommand` construye `@trato/shared` y después copia
+  `shared/package.json` + `shared/dist` directo dentro de
+  `backend/node_modules/@trato/shared/` como archivos reales, no symlink --
+  ahí sí lo encuentra `require.resolve` desde dentro de `backend`.
+- **`import 'pg'` estático en `backend/src/config/database.ts`.** Sequelize
+  carga el dialecto de Postgres con un `require()` dinámico en tiempo de
+  ejecución según `dialect: 'postgres'`; el empaquetador de Vercel sólo traza
+  imports estáticos, así que sin esa línea `pg` queda fuera del bundle aunque
+  esté instalado, y la función revienta con "Please install pg package
+  manually" apenas se crea el `Sequelize`.
+- **El esquema se pobló una vez con `sequelize.sync({ alter: true })` corrido
+  a mano** (en un sandbox con acceso de red real a Postgres, no desde el
+  camino de producción -- el guard `esProduccion` sigue impidiendo que el
+  servidor lo haga solo al arrancar) contra la base nueva de Neon. Creó las
+  16 tablas del modelo. **Esto no es un sistema de migraciones**: sigue
+  pendiente pasar a uno de verdad antes de que el esquema cambie en
+  producción, como ya advertía la nota de "Correr el proyecto" más arriba.
+- **Vercel Authentication (SSO) se desactivó** en el proyecto: por defecto
+  protege todos los deploys detrás de un login de Vercel, lo que bloqueaba
+  que n8n (o cualquier cliente externo) llamara a `/api/v1/integraciones/*`
+  sin sesión de Vercel.
+- Verificado en producción: `GET /health` responde 200, y
+  `GET /api/v1/integraciones/propiedades-pendientes` con el header
+  `x-integracion-key` autentica y responde `{"propiedades":[]}` (vacío
+  porque todavía no hay propiedades con rol de avalúo cargado).
 
 ## Seguridad (implementado)
 
@@ -455,9 +516,11 @@ documentada, pero ambos son consultables por cualquiera, no sólo por el dueño.
   armado y guardado -- no sólo documentado -- en la cuenta de n8n del dueño
   del proyecto: ["Trato - Contribuciones (Tesorería)"](https://krostyman666.app.n8n.cloud/workflow/neHHeekLAE0LtnDj),
   **probado en vivo contra el servicio real y confirmado funcionando de
-  punta a punta**. Guardado sin activar porque `Config.baseUrl` sigue
-  siendo un placeholder -- no hay todavía un backend público al que
-  apuntar, no porque falte probar el flujo. Lista las propiedades
+  punta a punta**. `Config.baseUrl` ya apunta al backend real
+  (`https://trato-backend.vercel.app/api/v1`, ver "Despliegue del backend en
+  Vercel"); falta sólo crear en n8n la credencial con la API key de
+  integración y activar el workflow -- ya no por falta de un backend
+  público, que es justo lo que se resolvió. Lista las propiedades
   pendientes y, por cada una, corre el paso de Tesorería.
   - **Primera versión (descartada): una sola llamada síncrona.** Usaba un
     agente de navegador de Browserbase (`resource: agent`, `operation:
