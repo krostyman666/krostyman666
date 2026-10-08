@@ -1,5 +1,10 @@
 {
   "buildCommand": "cd .. && npm run build -w @trato/shared",
   "outputDirectory": "public",
-  "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
+  "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
+  "functions": {
+    "api/index.ts": {
+      "includeFiles": "../shared/dist/**"
+    }
+  }
 }
