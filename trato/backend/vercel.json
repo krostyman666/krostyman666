@@ -1,10 +1,5 @@
 {
-  "buildCommand": "cd .. && npm run build -w @trato/shared",
+  "buildCommand": "cd .. && npm run build -w @trato/shared && rm -rf backend/node_modules/@trato/shared && mkdir -p backend/node_modules/@trato/shared && cp -R shared/package.json shared/dist backend/node_modules/@trato/shared/",
   "outputDirectory": "public",
-  "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
-  "functions": {
-    "api/index.ts": {
-      "includeFiles": "../shared/dist/**"
-    }
-  }
+  "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
 }
