@@ -1,4 +1,5 @@
 {
   "buildCommand": "cd .. && npm run build -w @trato/shared",
+  "outputDirectory": "public",
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
 }
