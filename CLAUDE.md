@@ -31,7 +31,7 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Derechos del titular: acceso, rectificación, supresión, oposición, portabilidad | Listo, probado en navegador |
 | Registro de actividades de tratamiento y plazos de conservación | Listo; la purga de lo vencido ahora se puede ejecutar (`/datos-vencidos`, admin), aunque sigue siendo un botón que alguien aprieta, no un cron |
 | Notificación de brechas de seguridad en 72 horas | Listo, probado en navegador (`/incidentes`, admin) |
-| Conexión a SII y Tesorería para avalúo y contribuciones | Listo el conector y la carga manual (`/datos-externos`) para cuando el flujo no pueda. Tesorería: workflow de n8n armado y guardado (agente de navegador para el reCAPTCHA v3 + guardado en Trato), sin activar -- falta la URL pública del backend y la credencial de integración, que nadie más que el dueño del proyecto puede poner. SII: sigue bloqueado por anti-bot |
+| Conexión a SII y Tesorería para avalúo y contribuciones | Listo el conector y la carga manual (`/datos-externos`), que es la vía real hoy. Tesorería: workflow de n8n armado y guardado, sin activar -- probado en vivo cuatro veces contra el servicio real y las cuatro el paso de Browserbase se cortó a los ~120-140s por el timeout fijo del Gateway de n8n, antes de completar la tarea. No es un problema de configuración; hace falta otra arquitectura de automatización (nodos discretos en vez de una sola llamada síncrona), no probada todavía. SII: sigue bloqueado por anti-bot |
 | Bot de preguntas del comprador, con cola interna de derivaciones | Listo, probado en navegador |
 | Promesa: negociación de cláusulas entre las partes | Listo, probado en navegador |
 | Firma de la promesa por ambas partes | Listo con firma electrónica simple; FEA pendiente de proveedor |
@@ -451,34 +451,45 @@ documentada, pero ambos son consultables por cualquiera, no sólo por el dueño.
   uno) y las contribuciones caen al certificado del expediente
   (`deuda_contribuciones`) si está `conforme`. Sólo si nada de eso hay, se
   muestra "fuente por conectar".
-- **Quién puebla la caché**: para Tesorería, ya hay un workflow de n8n real,
+- **Quién puebla la caché**: para Tesorería hay un workflow de n8n real,
   armado y guardado -- no sólo documentado -- en la cuenta de n8n del dueño
   del proyecto: ["Trato - Contribuciones (Tesorería)"](https://krostyman666.app.n8n.cloud/workflow/87AvVmheP4453Qx0),
-  **guardado sin activar** (no corre ni gasta nada hasta que alguien lo
-  active). Lista las propiedades pendientes, consulta Tesorería por rol con
-  un agente de navegador (Browserbase vía el Gateway de n8n, sin necesidad
-  de cuenta ni tarjeta propia) que pasa el reCAPTCHA v3 invisible con una
-  sesión de navegador real y reporta la propiedad y las cuotas tal como las
-  muestra la página, y un nodo de código recalcula `pendiente`/`atrasada`
-  por fecha él mismo -- nunca confía en que el agente clasifique el estado,
-  mismo principio de "no inventamos cifras" aplicado a una fuente
-  automatizada. Habla con `/integraciones/*` por HTTP Request directo, sin
-  el nodo custom `n8n-nodes-trato` (publicarlo en el registro de npm sólo
-  para instalarlo en una cuenta de n8n gestionada no vale la pena cuando
-  hablarle a la API con HTTP Request es exactamente lo mismo). El paquete
-  `n8n-nodes-trato/` y su README siguen documentando las tres llamadas
-  crudas capturadas contra el API Gateway real de `contribuciones.tgr.cl`
-  -- la prueba de que el bloqueo es reCAPTCHA v3, no anti-bot, y de que el
-  dato existe con esa forma -- aunque el workflow ya construido no las
-  replica directamente (ver el README para la decisión completa). **Falta
-  sólo lo que ningún flujo puede resolver solo**: la URL pública del backend
-  de Trato (hoy sólo corre en `localhost` de una sesión de desarrollo
-  efímera) y la credencial con `INTEGRACION_API_KEY`, ambas en el nodo
-  `Config` y los nodos `Trato - Integración API Key` del workflow. Para el
-  SII sigue sin poderse ni con este enfoque: su portal tiene protección
-  anti-bot (queue-it) que bloquea navegadores automatizados -- no es un
-  reCAPTCHA que un agente resuelva solo con pasar por un navegador real --
-  y por eso no se armó un workflow para algo confirmado que no funciona.
+  **guardado sin activar, y probado en vivo sin éxito todavía**. Lista las
+  propiedades pendientes, y el paso de Tesorería usa un agente de navegador
+  (Browserbase vía el Gateway de n8n, sin necesidad de cuenta ni tarjeta
+  propia) que debería pasar el reCAPTCHA v3 invisible y reportar la
+  propiedad y las cuotas tal como las muestra la página -- un nodo de
+  código recalcularía `pendiente`/`atrasada` por fecha él mismo después,
+  nunca confiando en que el agente clasifique el estado. **Probado cuatro
+  veces contra el servicio real** (ROL 00001-001 Santiago y ROL 711-59 Las
+  Condes; modo `cua` y `dom`; instrucción larga y una versión corta con URL
+  de entrada directa) y **las cuatro veces se cortó entre 130 y 142
+  segundos** con un error 524 del propio Gateway de n8n (no de Tesorería):
+  el nodo hace una única llamada síncrona que espera a que el agente
+  termine toda la tarea, y el proxy del Gateway la corta a los ~120
+  segundos fijos -- la tarea real no entra en esa ventana, de forma
+  consistente, sin importar el modo o el largo de la instrucción. Es un
+  límite estructural de usar `n8n-nodes-browserbase` así (`resource:
+  agent`, `operation: execute`), no un problema de configuración: **una
+  corrida programada real se toparía con el mismo techo**. Arreglarlo de
+  verdad pide otra arquitectura (pasos discretos como nodos separados de
+  n8n, cada uno con su propio timeout -- un community node de
+  Puppeteer/Playwright autoalojado lo permitiría, pero no es viable en n8n
+  Cloud, que es donde vive esta cuenta), no intentada todavía. Mientras
+  tanto, **`/datos-externos` sigue siendo la vía real para cargar
+  contribuciones**, no un parche temporal. Habla con `/integraciones/*` por
+  HTTP Request directo, sin el nodo custom `n8n-nodes-trato` (publicarlo en
+  el registro de npm sólo para instalarlo en una cuenta de n8n gestionada
+  no vale la pena cuando hablarle a la API con HTTP Request es exactamente
+  lo mismo). El paquete `n8n-nodes-trato/` y su README siguen documentando
+  las tres llamadas crudas capturadas contra el API Gateway real de
+  `contribuciones.tgr.cl` -- la prueba de que el bloqueo es reCAPTCHA v3 y
+  no anti-bot, y de que el dato existe con esa forma -- aunque el workflow
+  ya construido no las replica directamente. Para el SII sigue sin poderse
+  ni con este enfoque: su portal tiene protección anti-bot (queue-it) que
+  bloquea navegadores automatizados -- no es un reCAPTCHA que un agente
+  resuelva solo con pasar por un navegador real -- y por eso no se armó un
+  workflow para algo confirmado que no funciona.
 - **Cuando el flujo no puede, alguien del equipo puede.** `/datos-externos`
   (rol admin o asesor) muestra la misma cola de pendientes y deja llenar el
   avalúo fiscal o las cuotas de contribuciones a mano, propiedad por

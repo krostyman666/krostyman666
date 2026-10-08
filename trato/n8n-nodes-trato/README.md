@@ -281,21 +281,65 @@ tres llamadas HTTP de más arriba siguen documentadas porque son la prueba de
 que el reCAPTCHA v3 es el único bloqueo real (no anti-bot) y de que el dato
 existe y tiene esta forma; no porque el workflow las use directamente.
 
-**Para dejarlo funcionando falta sólo lo que ningún flujo puede resolver
-solo:**
+**Corrección importante, probada contra el servicio real: el paso de
+Browserbase, tal como está armado, no funciona todavía.** Se probó cuatro
+veces en vivo (ROL 00001-001 Santiago, y ROL 711-59 Las Condes; modo `cua`
+y modo `dom`; instrucción larga y una versión corta con URL de entrada
+directa a `contribuciones.tgr.cl`) y **las cuatro veces el paso se cortó
+entre 130 y 142 segundos** con el mismo error:
+
+```
+Error 524: A timeout occurred
+The origin web server did not return a complete response within
+the 120-second Proxy Read Timeout window
+```
+
+Este error no viene de Tesorería ni de Browserbase -- viene del propio
+**Gateway de n8n** (`ai-assistant.n8n.io`), que actúa de intermediario para
+la credencial gestionada y corta la llamada síncrona a los ~120 segundos
+fijos. Ni el modo, ni el largo de la instrucción, ni partir directo en
+`contribuciones.tgr.cl` en vez de `web.tesoreria.cl` cambiaron el
+resultado de forma significativa -- la tarea completa (cargar la página,
+llenar comuna/rol/subrol, esperar el reCAPTCHA v3, leer el resultado y
+responder en JSON) simplemente no entra en esa ventana, de forma
+consistente. Es un límite estructural del nodo `n8n-nodes-browserbase`
+usado así (`resource: agent`, `operation: execute`, una sola llamada
+síncrona que espera a que el agente termine todo antes de responder), no
+algo que se arregle ajustando parámetros -- **una corrida programada real
+se toparía con el mismo techo**.
+
+Caminos para resolverlo de verdad, ninguno intentado todavía:
+
+- Un nodo de automatización de navegador que exponga pasos **discretos**
+  (navegar, hacer clic, esperar, extraer) como nodos separados de n8n en
+  vez de una sola llamada que hace todo -- cada nodo tiene su propio
+  timeout, normalmente mucho más generoso que 120s. Un community node de
+  Puppeteer/Playwright autoalojado haría esto, pero exige que la instancia
+  de n8n tenga Chromium instalado -- **no viable en n8n Cloud** (la cuenta
+  usada acá es n8n Cloud, no autoalojado), sólo en una instancia propia.
+- Revisar si una versión más nueva de `n8n-nodes-browserbase` expone
+  operaciones de sesión más granulares (crear sesión, actuar, cerrar) en
+  vez de sólo `agent.execute`, `fetch.fetch` y `search.search` -- la
+  versión instalada hoy (vía el Gateway) no las tiene.
+
+**Mientras tanto, `/datos-externos` sigue siendo el camino real** para
+cargar contribuciones: no es un parche temporal, es la vía que ya funciona
+hoy.
 
 1. Abrir el nodo **Config** y poner la URL pública del backend de Trato
    (hoy el backend sólo corre en `localhost` dentro de una sesión de
    desarrollo efímera -- no hay todavía un despliegue público al que n8n
-   pueda llamar).
+   pueda llamar) -- esto sigue pendiente independientemente del punto
+   anterior.
 2. Abrir cualquiera de los nodos **Trato - Integración API Key** y
    configurar la credencial con el mismo valor que `INTEGRACION_API_KEY` en
    el `.env` del backend, como header `x-integracion-key`.
 
-El nodo de Browserbase no necesita nada: su credencial quedó asignada sola
-vía el Gateway de n8n al crear el workflow. El flujo de avalúo fiscal (SII)
-no se armó: sigue bloqueado por anti-bot real (queue-it), no por reCAPTCHA,
-y un workflow para algo confirmado que no funciona no sirve de nada.
+El nodo de Browserbase no necesita credencial propia: queda asignada sola
+vía el Gateway de n8n al crear el workflow -- el problema no es de acceso,
+es de tiempo. El flujo de avalúo fiscal (SII) no se armó: sigue bloqueado
+por anti-bot real (queue-it), no por reCAPTCHA, y un workflow para algo
+confirmado que no funciona no sirve de nada.
 
 ## Forma de los datos que Trato espera
 
