@@ -352,23 +352,46 @@ explícito (`schemaType: manual`) para que Firecrawl devuelva el objeto ya
 tipado en vez de depender de que el modelo formatee JSON a mano dentro de
 un texto.
 
-**Construida y validada estáticamente -- esquema de cada nodo, conexiones,
-el bucle de sondeo -- pero todavía no se ejecutó ni una sola vez contra el
-servicio real.** A diferencia de la primera versión (descartada después de
-probarla cuatro veces en vivo), esta segunda versión sólo pasó por
-`validate_workflow`. Antes de confiar en que corre sola conviene probarla
-con al menos un rol real y revisar la forma exacta que devuelve
-`getAgentStatus` de Firecrawl: la documentación del nodo dice que trae
-"status (processing, completed, failed), extracted data, credits used, and
-expiration time" pero no el nombre exacto del campo de datos, así que el
-nodo `Mapear resultado de Tesorería` busca el resultado en `data.json`,
-`data.extract` o `data` directamente, en ese orden -- y si ninguno trae un
-objeto usable, falla con un mensaje que lista las claves recibidas, en vez
-de adivinar.
+**Probada en vivo contra el servicio real (ROL 711-59, Las Condes) y
+confirmada funcionando de punta a punta**, tanto en el workflow real como en
+un workflow de prueba aparte. La corrida expuso la forma real -- no
+documentada -- de la respuesta de Firecrawl, distinta de lo que se había
+asumido al construir el flujo, y con eso se encontraron y corrigieron tres
+fallas:
+
+- **`agentAsync` devuelve el id del job anidado bajo `data`**
+  (`{"data": {"success": true, "id": "...", "threadId": "..."}}`), no al
+  nivel superior. El nodo `Preparar intentos de sondeo` no lo veía y
+  fallaba con un mensaje honesto ("Firecrawl no devolvio un id de job...")
+  en vez de romperse en silencio -- justo lo que ese diseño defensivo debía
+  hacer, y lo hizo. Arreglado desenvolviendo `data` antes de buscar
+  `id`/`agentId`/`jobId`.
+- **`getAgentStatus` devuelve el estado doblemente anidado**:
+  `{"data": {"success": true, "status": "completed"|"processing"|"failed",
+  "data": {<objeto extraído>}, "model": "spark-2", "creditsUsed": 43, ...}}`.
+  El nodo `¿Terminó el job?` comparaba `$json.status` (nivel equivocado) y
+  nunca detectaba `completed`: agotaba los 16 intentos aunque el dato ya
+  estuviera listo desde antes. Arreglado comparando `$json.data.status`.
+- **El esquema de extracción no se respeta de forma estricta.** Pese a
+  declarar `monto` como `number`, Firecrawl lo devolvió como texto con
+  formato de moneda (`"$ 938.189"`); y pese a pedir el campo `vencimiento`,
+  lo devolvió como `fecha_vencimiento`, en formato chileno abreviado
+  (`"30/nov./26"`, no ISO). El nodo `Mapear resultado de Tesorería` ahora
+  normaliza ambos de forma determinista -- nunca adivina un valor, sólo
+  reinterpreta el mismo dato que la página mostró: quita todo lo que no sea
+  dígito para el monto (`"$ 938.189"` → `938189`) y traduce el mes
+  abreviado para la fecha (`"30/nov./26"` → `"2026-11-30"`). Cada campo
+  extraído además trae un `<campo>_citation` con la URL fuente (inofensivo,
+  se ignora).
+
+Dato real devuelto por la consulta de prueba: propiedad "Rosario 90", Las
+Condes, rol 071-00711-059, una cuota de período 4-2026 por $938.189 con
+vencimiento 2026-11-30 -- 43 créditos de Gateway consumidos en esa corrida.
 
 **Mientras tanto, `/datos-externos` sigue siendo el camino real** para
 cargar contribuciones: no es un parche temporal, es la vía que ya funciona
-hoy.
+hoy. El flujo de Tesorería ya está probado y funcionando; lo único que
+falta para activarlo es:
 
 1. Abrir el nodo **Config** y poner la URL pública del backend de Trato
    (hoy el backend sólo corre en `localhost` dentro de una sesión de

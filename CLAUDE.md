@@ -31,7 +31,7 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Derechos del titular: acceso, rectificación, supresión, oposición, portabilidad | Listo, probado en navegador |
 | Registro de actividades de tratamiento y plazos de conservación | Listo; la purga de lo vencido ahora se puede ejecutar (`/datos-vencidos`, admin), aunque sigue siendo un botón que alguien aprieta, no un cron |
 | Notificación de brechas de seguridad en 72 horas | Listo, probado en navegador (`/incidentes`, admin) |
-| Conexión a SII y Tesorería para avalúo y contribuciones | Listo el conector y la carga manual (`/datos-externos`), que es la vía real hoy. Tesorería: workflow de n8n rediseñado con arquitectura asíncrona (Firecrawl Agent: arranque + sondeo corto repetido, en vez de la única llamada síncrona de Browserbase que se cortaba siempre a los ~120-140s) -- guardado, sin activar, **todavía no probado en vivo con esta arquitectura nueva**. SII: sigue bloqueado por anti-bot |
+| Conexión a SII y Tesorería para avalúo y contribuciones | Listo el conector y la carga manual (`/datos-externos`), que es la vía real hoy. Tesorería: workflow de n8n con arquitectura asíncrona (Firecrawl Agent: arranque + sondeo corto repetido) **probado en vivo contra el servicio real y funcionando de punta a punta** (ROL 711-59, Las Condes); guardado, sin activar todavía por falta de un backend público donde apuntar `baseUrl`. SII: sigue bloqueado por anti-bot |
 | Bot de preguntas del comprador, con cola interna de derivaciones | Listo, probado en navegador |
 | Promesa: negociación de cláusulas entre las partes | Listo, probado en navegador |
 | Firma de la promesa por ambas partes | Listo con firma electrónica simple; FEA pendiente de proveedor |
@@ -454,9 +454,11 @@ documentada, pero ambos son consultables por cualquiera, no sólo por el dueño.
 - **Quién puebla la caché**: para Tesorería hay un workflow de n8n real,
   armado y guardado -- no sólo documentado -- en la cuenta de n8n del dueño
   del proyecto: ["Trato - Contribuciones (Tesorería)"](https://krostyman666.app.n8n.cloud/workflow/neHHeekLAE0LtnDj),
-  **guardado sin activar, todavía no probado en vivo con esta versión**.
-  Lista las propiedades pendientes y, por cada una, corre el paso de
-  Tesorería.
+  **probado en vivo contra el servicio real y confirmado funcionando de
+  punta a punta**. Guardado sin activar porque `Config.baseUrl` sigue
+  siendo un placeholder -- no hay todavía un backend público al que
+  apuntar, no porque falte probar el flujo. Lista las propiedades
+  pendientes y, por cada una, corre el paso de Tesorería.
   - **Primera versión (descartada): una sola llamada síncrona.** Usaba un
     agente de navegador de Browserbase (`resource: agent`, `operation:
     execute`) que hacía toda la tarea de una vez -- navegar, llenar el
@@ -485,15 +487,32 @@ documentada, pero ambos son consultables por cualquiera, no sólo por el dueño.
     por fecha él mismo, nunca confiando en que el agente clasifique el
     estado, y si el job de Firecrawl falla o no trae un objeto de datos
     reconocible, **no guarda nada** -- registra el motivo y sigue con la
-    siguiente propiedad, en vez de inventar una cifra. **Construida y
-    validada estáticamente (esquema de cada nodo, conexiones, bucles);
-    todavía no se ejecutó una sola vez contra el servicio real** -- a
-    diferencia de la primera versión, que sí se probó en vivo cuatro veces
-    antes de descartarla. Antes de confiar en que corre sola hay que
-    probarla con al menos un rol real y revisar qué forma exacta devuelve
-    `getAgentStatus` de Firecrawl (el código de mapeo busca el resultado en
-    `data.json`, `data.extract` o `data` directamente, a falta de
-    documentación exacta del campo).
+    siguiente propiedad, en vez de inventar una cifra.
+
+    **Probada en vivo contra el servicio real (ROL 711-59, Las Condes) y
+    confirmada funcionando de punta a punta.** La prueba expuso la forma
+    real -- no documentada -- de la respuesta de Firecrawl, y con eso se
+    encontraron y corrigieron tres fallas:
+    - `agentAsync` devuelve el id del job anidado bajo `data` (`{"data":
+      {"id": "..."}}`), no al nivel superior como se asumió al construir el
+      workflow; el nodo que arranca el sondeo no lo veía.
+    - `getAgentStatus` devuelve el estado doblemente anidado
+      (`{"data": {"status": "completed", "data": {...}}}`); el nodo que
+      pregunta "¿terminó?" comparaba contra el nivel equivocado y nunca
+      detectaba `completed`, así que agotaba los 16 intentos aun cuando el
+      dato ya estaba listo desde el primer minuto.
+    - El esquema de extracción no se respeta de forma estricta: `monto`
+      vuelve como texto con formato de moneda (`"$ 938.189"`, no `938189`)
+      y la fecha vuelve en un campo llamado `fecha_vencimiento` (no
+      `vencimiento`) en formato chileno abreviado (`"30/nov./26"`, no
+      ISO). El paso de mapeo ahora normaliza ambos de forma determinista
+      (quita todo lo que no sea dígito para el monto; traduce el mes
+      abreviado para la fecha) en vez de rechazar un dato real sólo porque
+      no calza con el tipo declarado.
+
+    Las tres correcciones están aplicadas en el workflow guardado. Lo único
+    que falta para activarlo es la URL del backend en `Config` y la
+    credencial de integración -- ver la nota adhesiva del propio workflow.
   - Mientras tanto, **`/datos-externos` sigue siendo la vía real para
     cargar contribuciones**, no un parche temporal. Habla con
     `/integraciones/*` por HTTP Request directo, sin el nodo custom
