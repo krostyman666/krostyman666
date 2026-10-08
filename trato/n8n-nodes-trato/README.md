@@ -246,14 +246,56 @@ Ambos flujos pueden ir en el mismo workflow (dos ramas) o en flujos
 separados con su propio horario -- contribuciones cambia trimestralmente,
 avalúo fiscal semestralmente, así que no necesitan la misma frecuencia.
 
-**Este flujo no se armó todavía como workflow de n8n** porque la única
-cuenta de n8n accesible desde esta sesión es una cuenta distinta (sin el
-nodo custom de Trato instalado, usada para otro proyecto) -- armarlo le
-corresponde a quien tenga la instancia real con `n8n-nodes-trato` instalado
-(ver "Instalación local" arriba). Lo que sí se verificó de punta a punta,
-contra el servicio real y con datos reales, son las tres llamadas HTTP de
-arriba: con eso, armar los nodos en la instancia correcta es trabajo de
-conectar lo ya probado, no de seguir investigando.
+**Este flujo ya está armado como workflow de n8n**, en la cuenta personal
+del dueño del proyecto: ["Trato - Contribuciones (Tesorería)"](https://krostyman666.app.n8n.cloud/workflow/87AvVmheP4453Qx0),
+guardado pero **sin activar** (no corre solo ni gasta nada hasta que alguien
+lo active). Usa HTTP Request contra `GET /integraciones/propiedades-pendientes`
+y `PATCH /integraciones/propiedades/:id/contribuciones` (sin el nodo custom
+`n8n-nodes-trato`, que exigiría publicarlo en el registro de npm para
+instalarlo en una cuenta de n8n gestionada -- hablar con la misma API por
+HTTP Request directo es exactamente lo mismo que haría el nodo custom, así
+que no hace falta).
+
+**Decisión de diseño distinta a la documentada arriba**: en vez de replicar
+las tres llamadas crudas a la API interna de AWS (`obtener/rolin` +
+`deudasrol`), el paso de Tesorería usa un nodo de **agente de navegador**
+(Browserbase, vía el Gateway de n8n -- sin necesidad de cuenta ni tarjeta
+propia) al que se le da una instrucción en lenguaje natural: entrar a
+`web.tesoreria.cl`, llegar a "Pagar Contribuciones", llenar comuna/rol/subrol,
+esperar a que el reCAPTCHA v3 invisible se resuelva solo, y reportar la
+propiedad y las cuotas tal como las muestra la página, en JSON. Dos razones:
+
+- Es más robusto a que el portal cambie su HTML o sus endpoints internos
+  -- el agente navega como lo haría una persona, no depende de una ruta de
+  API que nadie documenta y que puede cambiar sin aviso.
+- No hace falta capturar ni reenviar el `captchaSessionToken`: el agente
+  hace la consulta completa dentro de la misma sesión de navegador donde el
+  reCAPTCHA ya se resolvió.
+
+Lo que el agente reporta se trata como datos crudos, nunca como juicio: el
+nodo siguiente (`Mapear resultado de Tesorería`) recalcula `pendiente` vs.
+`atrasada` comparando la fecha de vencimiento él mismo, y sólo escribe en
+Trato si el JSON del agente parsea limpio y cada cuota trae monto y fecha --
+mismo principio de "no inventamos cifras" que el resto del proyecto. Las
+tres llamadas HTTP de más arriba siguen documentadas porque son la prueba de
+que el reCAPTCHA v3 es el único bloqueo real (no anti-bot) y de que el dato
+existe y tiene esta forma; no porque el workflow las use directamente.
+
+**Para dejarlo funcionando falta sólo lo que ningún flujo puede resolver
+solo:**
+
+1. Abrir el nodo **Config** y poner la URL pública del backend de Trato
+   (hoy el backend sólo corre en `localhost` dentro de una sesión de
+   desarrollo efímera -- no hay todavía un despliegue público al que n8n
+   pueda llamar).
+2. Abrir cualquiera de los nodos **Trato - Integración API Key** y
+   configurar la credencial con el mismo valor que `INTEGRACION_API_KEY` en
+   el `.env` del backend, como header `x-integracion-key`.
+
+El nodo de Browserbase no necesita nada: su credencial quedó asignada sola
+vía el Gateway de n8n al crear el workflow. El flujo de avalúo fiscal (SII)
+no se armó: sigue bloqueado por anti-bot real (queue-it), no por reCAPTCHA,
+y un workflow para algo confirmado que no funciona no sirve de nada.
 
 ## Forma de los datos que Trato espera
 
