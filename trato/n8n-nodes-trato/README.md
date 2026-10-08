@@ -247,7 +247,7 @@ separados con su propio horario -- contribuciones cambia trimestralmente,
 avalúo fiscal semestralmente, así que no necesitan la misma frecuencia.
 
 **Este flujo ya está armado como workflow de n8n**, en la cuenta personal
-del dueño del proyecto: ["Trato - Contribuciones (Tesorería)"](https://krostyman666.app.n8n.cloud/workflow/87AvVmheP4453Qx0),
+del dueño del proyecto: ["Trato - Contribuciones (Tesorería)"](https://krostyman666.app.n8n.cloud/workflow/neHHeekLAE0LtnDj),
 guardado pero **sin activar** (no corre solo ni gasta nada hasta que alguien
 lo active). Usa HTTP Request contra `GET /integraciones/propiedades-pendientes`
 y `PATCH /integraciones/propiedades/:id/contribuciones` (sin el nodo custom
@@ -256,37 +256,22 @@ instalarlo en una cuenta de n8n gestionada -- hablar con la misma API por
 HTTP Request directo es exactamente lo mismo que haría el nodo custom, así
 que no hace falta).
 
-**Decisión de diseño distinta a la documentada arriba**: en vez de replicar
-las tres llamadas crudas a la API interna de AWS (`obtener/rolin` +
-`deudasrol`), el paso de Tesorería usa un nodo de **agente de navegador**
-(Browserbase, vía el Gateway de n8n -- sin necesidad de cuenta ni tarjeta
-propia) al que se le da una instrucción en lenguaje natural: entrar a
-`web.tesoreria.cl`, llegar a "Pagar Contribuciones", llenar comuna/rol/subrol,
-esperar a que el reCAPTCHA v3 invisible se resuelva solo, y reportar la
-propiedad y las cuotas tal como las muestra la página, en JSON. Dos razones:
+### Primera versión (descartada): una sola llamada síncrona
 
-- Es más robusto a que el portal cambie su HTML o sus endpoints internos
-  -- el agente navega como lo haría una persona, no depende de una ruta de
-  API que nadie documenta y que puede cambiar sin aviso.
-- No hace falta capturar ni reenviar el `captchaSessionToken`: el agente
-  hace la consulta completa dentro de la misma sesión de navegador donde el
-  reCAPTCHA ya se resolvió.
+En vez de replicar las tres llamadas crudas a la API interna de AWS
+(`obtener/rolin` + `deudasrol`), la primera versión del paso de Tesorería
+usaba un nodo de **agente de navegador** (Browserbase, vía el Gateway de
+n8n -- sin necesidad de cuenta ni tarjeta propia) al que se le daba una
+instrucción en lenguaje natural: entrar a `web.tesoreria.cl`, llegar a
+"Pagar Contribuciones", llenar comuna/rol/subrol, esperar a que el
+reCAPTCHA v3 invisible se resolviera solo, y reportar la propiedad y las
+cuotas tal como las muestra la página, en JSON -- todo dentro de una única
+llamada síncrona (`resource: agent`, `operation: execute`).
 
-Lo que el agente reporta se trata como datos crudos, nunca como juicio: el
-nodo siguiente (`Mapear resultado de Tesorería`) recalcula `pendiente` vs.
-`atrasada` comparando la fecha de vencimiento él mismo, y sólo escribe en
-Trato si el JSON del agente parsea limpio y cada cuota trae monto y fecha --
-mismo principio de "no inventamos cifras" que el resto del proyecto. Las
-tres llamadas HTTP de más arriba siguen documentadas porque son la prueba de
-que el reCAPTCHA v3 es el único bloqueo real (no anti-bot) y de que el dato
-existe y tiene esta forma; no porque el workflow las use directamente.
-
-**Corrección importante, probada contra el servicio real: el paso de
-Browserbase, tal como está armado, no funciona todavía.** Se probó cuatro
-veces en vivo (ROL 00001-001 Santiago, y ROL 711-59 Las Condes; modo `cua`
-y modo `dom`; instrucción larga y una versión corta con URL de entrada
-directa a `contribuciones.tgr.cl`) y **las cuatro veces el paso se cortó
-entre 130 y 142 segundos** con el mismo error:
+**Se probó cuatro veces contra el servicio real** (ROL 00001-001 Santiago,
+y ROL 711-59 Las Condes; modo `cua` y modo `dom`; instrucción larga y una
+versión corta con URL de entrada directa a `contribuciones.tgr.cl`) y **las
+cuatro veces el paso se cortó entre 130 y 142 segundos** con el mismo error:
 
 ```
 Error 524: A timeout occurred
@@ -294,33 +279,92 @@ The origin web server did not return a complete response within
 the 120-second Proxy Read Timeout window
 ```
 
-Este error no viene de Tesorería ni de Browserbase -- viene del propio
+Este error no venía de Tesorería ni de Browserbase -- venía del propio
 **Gateway de n8n** (`ai-assistant.n8n.io`), que actúa de intermediario para
 la credencial gestionada y corta la llamada síncrona a los ~120 segundos
 fijos. Ni el modo, ni el largo de la instrucción, ni partir directo en
-`contribuciones.tgr.cl` en vez de `web.tesoreria.cl` cambiaron el
-resultado de forma significativa -- la tarea completa (cargar la página,
-llenar comuna/rol/subrol, esperar el reCAPTCHA v3, leer el resultado y
-responder en JSON) simplemente no entra en esa ventana, de forma
-consistente. Es un límite estructural del nodo `n8n-nodes-browserbase`
-usado así (`resource: agent`, `operation: execute`, una sola llamada
-síncrona que espera a que el agente termine todo antes de responder), no
-algo que se arregle ajustando parámetros -- **una corrida programada real
-se toparía con el mismo techo**.
+`contribuciones.tgr.cl` en vez de `web.tesoreria.cl` cambiaron el resultado
+de forma significativa -- la tarea completa (cargar la página, llenar
+comuna/rol/subrol, esperar el reCAPTCHA v3, leer el resultado y responder
+en JSON) simplemente no entraba en esa ventana, de forma consistente. Era
+un límite estructural de empaquetar la tarea completa en una sola llamada
+bloqueante, no algo que se arreglara ajustando parámetros. El workflow de
+prueba usado para estas cuatro corridas quedó archivado; el workflow real
+de esta primera versión también se archivó al reemplazarlo por la que
+sigue.
 
-Caminos para resolverlo de verdad, ninguno intentado todavía:
+### Segunda versión (la actual): arranque asíncrono + sondeo corto
 
-- Un nodo de automatización de navegador que exponga pasos **discretos**
-  (navegar, hacer clic, esperar, extraer) como nodos separados de n8n en
-  vez de una sola llamada que hace todo -- cada nodo tiene su propio
-  timeout, normalmente mucho más generoso que 120s. Un community node de
-  Puppeteer/Playwright autoalojado haría esto, pero exige que la instancia
-  de n8n tenga Chromium instalado -- **no viable en n8n Cloud** (la cuenta
-  usada acá es n8n Cloud, no autoalojado), sólo en una instancia propia.
-- Revisar si una versión más nueva de `n8n-nodes-browserbase` expone
-  operaciones de sesión más granulares (crear sesión, actuar, cerrar) en
-  vez de sólo `agent.execute`, `fetch.fetch` y `search.search` -- la
-  versión instalada hoy (vía el Gateway) no las tiene.
+La idea: en vez de una llamada que espera a que toda la tarea termine,
+dividirla en **llamadas cortas** que individualmente nunca se acercan al
+techo de 120s del Gateway, sin importar cuánto tarde la tarea completa.
+
+Se evaluó si una versión más nueva de `n8n-nodes-browserbase` exponía
+operaciones de sesión más granulares -- no: por el Gateway sólo expone
+`agent.execute` (la que falla), `search.search` y `fetch.fetch` (sin
+JavaScript, no sirve para un formulario con reCAPTCHA). **Firecrawl**, que
+también está cubierto por los créditos del Gateway de n8n (`firecrawlApi`,
+sin cuenta propia, igual que Browserbase), sí expone lo necesario: un modo
+asíncrono (`resource: Agent`, `operation: agentAsync` +
+`getAgentStatus`) donde arrancar el trabajo y consultar su estado son dos
+llamadas HTTP cortas separadas, en vez de una sola que bloquea hasta el
+final.
+
+El flujo nuevo, por propiedad:
+
+```
+[Preparar rol y subrol]
+        │
+        ▼
+[Firecrawl: Iniciar consulta Tesorería (Agent.agentAsync)]
+   -- llamada corta, devuelve un id de job al instante
+        │
+        ▼
+[Preparar intentos de sondeo: genera hasta 16 intentos]
+        │
+        ▼
+   ┌─── bucle (splitInBatches) ───────────────────────┐
+   │ [Esperar 15s]                                     │
+   │       ▼                                           │
+   │ [Firecrawl: Consultar estado del job              │
+   │  (Agent.getAgentStatus)] -- llamada corta          │
+   │       ▼                                           │
+   │ [¿Terminó? (completed/failed)]                     │
+   │   no ──────────────────────────► vuelve a esperar  │
+   └─── sí ─────────────────────────────────────────────┘
+        │
+        ▼
+[Mapear resultado: recalcula pendiente/atrasada por fecha;
+ si el job falló o no trae datos usables, NO guarda nada --
+ registra el motivo y sigue con la siguiente propiedad]
+        │
+        ▼
+[Trato: Guardar contribuciones] (sólo si hubo datos reales)
+```
+
+16 intentos × 15s = 4 minutos de margen sobre los ~140s medidos en la
+primera versión -- si Firecrawl tarda lo mismo que Browserbase, el sondeo
+lo alcanza a ver sin problema, porque ninguna llamada individual espera
+más que unos segundos. El agente recibe la misma instrucción de siempre
+(navegar a `contribuciones.tgr.cl`, elegir comuna, llenar rol/subrol,
+esperar el reCAPTCHA v3 invisible, leer el resultado) más un esquema JSON
+explícito (`schemaType: manual`) para que Firecrawl devuelva el objeto ya
+tipado en vez de depender de que el modelo formatee JSON a mano dentro de
+un texto.
+
+**Construida y validada estáticamente -- esquema de cada nodo, conexiones,
+el bucle de sondeo -- pero todavía no se ejecutó ni una sola vez contra el
+servicio real.** A diferencia de la primera versión (descartada después de
+probarla cuatro veces en vivo), esta segunda versión sólo pasó por
+`validate_workflow`. Antes de confiar en que corre sola conviene probarla
+con al menos un rol real y revisar la forma exacta que devuelve
+`getAgentStatus` de Firecrawl: la documentación del nodo dice que trae
+"status (processing, completed, failed), extracted data, credits used, and
+expiration time" pero no el nombre exacto del campo de datos, así que el
+nodo `Mapear resultado de Tesorería` busca el resultado en `data.json`,
+`data.extract` o `data` directamente, en ese orden -- y si ninguno trae un
+objeto usable, falla con un mensaje que lista las claves recibidas, en vez
+de adivinar.
 
 **Mientras tanto, `/datos-externos` sigue siendo el camino real** para
 cargar contribuciones: no es un parche temporal, es la vía que ya funciona
@@ -329,17 +373,18 @@ hoy.
 1. Abrir el nodo **Config** y poner la URL pública del backend de Trato
    (hoy el backend sólo corre en `localhost` dentro de una sesión de
    desarrollo efímera -- no hay todavía un despliegue público al que n8n
-   pueda llamar) -- esto sigue pendiente independientemente del punto
-   anterior.
+   pueda llamar) -- esto sigue pendiente independientemente de la
+   arquitectura de Tesorería.
 2. Abrir cualquiera de los nodos **Trato - Integración API Key** y
    configurar la credencial con el mismo valor que `INTEGRACION_API_KEY` en
    el `.env` del backend, como header `x-integracion-key`.
+3. Confirmar la credencial **Firecrawl (Gateway)** en los dos nodos de
+   Firecrawl -- queda asignada sola vía el Gateway de n8n al crear el
+   workflow, pero conviene revisarla antes de activar.
 
-El nodo de Browserbase no necesita credencial propia: queda asignada sola
-vía el Gateway de n8n al crear el workflow -- el problema no es de acceso,
-es de tiempo. El flujo de avalúo fiscal (SII) no se armó: sigue bloqueado
-por anti-bot real (queue-it), no por reCAPTCHA, y un workflow para algo
-confirmado que no funciona no sirve de nada.
+El flujo de avalúo fiscal (SII) no se armó: sigue bloqueado por anti-bot
+real (queue-it), no por reCAPTCHA, y un workflow para algo confirmado que
+no funciona no sirve de nada.
 
 ## Forma de los datos que Trato espera
 
