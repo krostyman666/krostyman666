@@ -18,6 +18,14 @@ export const env = {
   port: Number(process.env.BACKEND_PORT ?? 3001),
   frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:3000',
   databaseUrl: requerido('DATABASE_URL'),
+  /**
+   * Conexiones máximas del pool por proceso. En serverless (Vercel) cada
+   * instancia tibia abre su propio pool, así que un `max` pensado para un
+   * único proceso persistente agota rápido el límite del proveedor con
+   * varias instancias concurrentes. El default bajo en producción asume un
+   * pooler (pgbouncer/Neon/Supabase) por delante multiplexando.
+   */
+  dbPoolMax: Number(process.env.DB_POOL_MAX ?? (process.env.NODE_ENV === 'production' ? 3 : 10)),
   jwtSecret: requerido('JWT_SECRET'),
   jwtExpira: process.env.JWT_EXPIRE ?? '7d',
 
