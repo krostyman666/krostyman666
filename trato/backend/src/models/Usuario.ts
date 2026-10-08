@@ -8,7 +8,7 @@ import {
 } from 'sequelize';
 import bcrypt from 'bcryptjs';
 import { sequelize } from '../config/database';
-import { esRutValido, limpiarRut } from '../utils/rut';
+import { esRutValido, limpiarRut } from '@trato/shared';
 
 const COSTO_BCRYPT = 12;
 

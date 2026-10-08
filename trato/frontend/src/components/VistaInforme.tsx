@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, Clock, FileSignature, Info, Landmark } from 'lucide-react';
 import { api, mensajeDeError } from '@/lib/api';
-import { formatearRut } from '@/lib/rut';
+import { formatearRut } from '@trato/shared';
 import PagoInforme from './PagoInforme';
 import {
   ETIQUETA_ESTADO_INFORME,

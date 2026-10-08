@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Calculator, FileText } from 'lucide-react';
 import { api, mensajeDeError } from '@/lib/api';
 import type { MinutaApi } from '@/lib/promesas';
-import { calcularTimbres } from '@/lib/timbres';
+import { calcularTimbres } from '@trato/shared';
 
 const formatearClp = (n: number) => `$${new Intl.NumberFormat('es-CL').format(n)}`;
 

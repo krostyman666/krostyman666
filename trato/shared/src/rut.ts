@@ -1,3 +1,10 @@
+/**
+ * RUT chileno: limpieza, dígito verificador (módulo 11), validación y formato.
+ * El algoritmo lo fija la ley y no cambia, así que corre igual en el backend
+ * (validación de registro) y en el frontend (feedback en el formulario antes
+ * de enviar) sin ida y vuelta al servidor.
+ */
+
 export function limpiarRut(rut: string): string {
   return rut.replace(/[.\-\s]/g, '').toUpperCase();
 }
@@ -20,14 +27,12 @@ export function calcularDigitoVerificador(cuerpo: string): string {
 export function esRutValido(rut: string): boolean {
   const limpio = limpiarRut(rut);
   if (!/^\d{7,8}[0-9K]$/.test(limpio)) return false;
-
-  const cuerpo = limpio.slice(0, -1);
-  const digito = limpio.slice(-1);
-  return calcularDigitoVerificador(cuerpo) === digito;
+  return calcularDigitoVerificador(limpio.slice(0, -1)) === limpio.slice(-1);
 }
 
 export function formatearRut(rut: string): string {
   const limpio = limpiarRut(rut);
+  if (limpio.length < 2) return limpio;
   const cuerpo = limpio.slice(0, -1);
   const digito = limpio.slice(-1);
   return `${cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}-${digito}`;

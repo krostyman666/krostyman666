@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import type { ClausulaPromesa } from '../models/ClausulaPromesa';
 import type { Usuario } from '../models/Usuario';
 import { CLAUSULA_POR_CODIGO } from './promesa';
-import { formatearRut } from '../utils/rut';
+import { formatearRut } from '@trato/shared';
 
 /**
  * La firma de la promesa.

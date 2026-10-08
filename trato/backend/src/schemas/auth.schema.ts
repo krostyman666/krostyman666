@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { esRutValido } from '../utils/rut';
+import { esRutValido } from '@trato/shared';
 
 const rut = Joi.string()
   .required()

@@ -5,7 +5,7 @@ import { Check, Eye, FileText, Inbox, MessageSquareWarning } from 'lucide-react'
 import { api, mensajeDeError } from '@/lib/api';
 import { ETIQUETA_EMISOR, type DocumentoApi } from '@/lib/propiedades';
 import { abrirArchivo } from '@/lib/documentos';
-import { formatearRut } from '@/lib/rut';
+import { formatearRut } from '@trato/shared';
 
 interface Caso {
   propiedad: { id: string; titulo: string; calle: string; numero: string; comuna: string };

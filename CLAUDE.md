@@ -47,7 +47,7 @@ trato/
 ├── backend/           API REST — Express 4 + Sequelize 6 + PostgreSQL
 ├── frontend/          Next.js 16 (App Router) + React 19 + Tailwind 4
 ├── n8n-nodes-trato/   Nodo custom de n8n; paquete propio, fuera de los workspaces de npm
-├── shared/            vacío; se cablea cuando haya un 2º módulo compartido
+├── shared/            RUT y timbres (DL 3.475): el único código que importan backend y frontend
 ├── infrastructure/
 └── docker-compose.yml   Postgres 15 + Redis 7
 ```
@@ -128,10 +128,52 @@ hay que pasar a migraciones antes del primer deploy.
     versión mayor en `argparse`/`js-yaml` sólo por esto.
   - El `uuid`/Sequelize moderado de siempre, sin tocar: forzarlo instala
     `sequelize@3.30.0`, un downgrade real.
-- **RUT duplicado en `backend/src/utils/rut.ts` y `frontend/src/lib/rut.ts`**: el
-  módulo 11 está fijado por ley y no cambia. Se mueve a `shared/` cuando aparezca
-  el segundo módulo compartido (probablemente tipos de propiedad o estados de
-  transacción).
+- **RUT y timbres viven en `shared/`, el primer paquete del workspace compartido.**
+  Ambos eran código duplicado byte-por-byte-casi entre `backend/src/utils/rut.ts`
+  y `frontend/src/lib/rut.ts` (y lo mismo para timbres dentro de
+  `dominio/minuta.ts`), justificado en su momento con "es aritmética/ley fija,
+  no vale la pena compartir todavía". La duplicación divergió sin que nadie lo
+  decidiera: `frontend/src/lib/rut.ts#formatearRut` tenía una guarda
+  (`if (limpio.length < 2) return limpio`) que la versión del backend no tenía
+  -- no rompía nada porque el formulario de registro nunca le pasa un RUT de un
+  solo dígito, pero es exactamente el tipo de divergencia silenciosa que la
+  duplicación invita. `shared/src/rut.ts` y `shared/src/timbres.ts` son ahora
+  la única fuente; `dominio/minuta.ts` se quedó sólo con `generarMinuta` (arma
+  el borrador) y ya no calcula el impuesto. Ambos paquetes (`backend`,
+  `frontend`) importan con `from '@trato/shared'`.
+  - **Resolución sin bundler, vía el symlink del workspace de npm.** `shared/package.json`
+    apunta `main`/`types` directo a `./src/index.ts` -- sin paso de build, sin
+    alias de `tsconfig` ni `moduleNameMapper` de más. `npm install` en la raíz
+    crea `node_modules/@trato/shared -> ../../shared`, y de ahí en adelante
+    cualquier herramienta consciente de TypeScript (tsc, ts-jest, `tsx watch`,
+    vitest, Next.js/Turbopack) resuelve el import siguiendo ese symlink y
+    compila el `.ts` igual que si fuera código propio. No hace falta
+    `transpilePackages` en Next ni nada especial: Next ya trata como código
+    fuente cualquier módulo cuyo *real path* (post-symlink) caiga fuera de
+    `node_modules`, que es justo este caso. Verificado con los cuatro
+    consumidores reales: `type-check`/`lint`/`test`/`build` de `backend` y de
+    `frontend` pasan, y en el navegador el registro valida y formatea el RUT
+    (`esRutValido`/`formatearRut` vía `@trato/shared`) y la calculadora de
+    timbres de una promesa firmada con crédito calcula bien (UF 90.000.000 a
+    240 meses → tasa 0,8%, $720.000, el mismo fixture que el test).
+  - **Pendiente antes de un primer despliegue real del backend compilado.**
+    `shared` no tiene build propio: sirve su `.ts` tal cual, que es lo que
+    hace posible la resolución de arriba sin fricción en desarrollo. Eso
+    funciona para todo lo que ya se verificó (dev, tests, `next build`) porque
+    esas herramientas compilan TypeScript al vuelo. Pero `npm run build -w
+    @trato/backend` + `node dist/index.js` -- el camino de producción que este
+    proyecto todavía no ha ejercitado ni una vez, ver la nota de migraciones
+    más abajo -- fallaría: `tsc` no reescribe el `require("@trato/shared")`
+    emitido, y Node en runtime puro no sabe convertir TypeScript a JS al
+    resolver el `main` del paquete (confirmado: falla con
+    `ERR_MODULE_NOT_FOUND` incluso con el *type stripping* nativo de Node 22,
+    porque esa función exige extensión explícita en cada import relativo, y
+    usarla obligaría a `allowImportingTsExtensions` en todos los `tsconfig.json`
+    que tocan `shared`, no sólo el suyo). Antes de ese primer despliegue hay
+    que darle a `shared` un build real (`tsc` a `dist/`, `main`/`types`
+    apuntando ahí) y decidir cómo no perder la recarga en caliente en
+    desarrollo -- la misma categoría de pendiente que S3 para archivos o
+    migraciones para el esquema.
 - **`.env` en la raíz del monorepo**; `backend/src/config/env.ts` lo carga por ruta
   y falla al arrancar si falta `DATABASE_URL` o `JWT_SECRET`.
 - **Calculadora sólo compara comisión de corretaje.** Notaría, Conservador e
@@ -635,12 +677,13 @@ Dos piezas:
   libre dentro de la cláusula "condición de crédito" (`{monto}`), no como un
   campo estructurado, así que la función no intenta leerlo de ahí -- lo
   recibe como parámetro de quien prepara la escritura y ya lo sabe. Por eso
-  es una calculadora, no un dato guardado: la misma fórmula vive duplicada en
-  `frontend/src/lib/timbres.ts` (igual que `rut.ts`, aritmética fija por ley)
-  para que corra en el cliente sin ida y vuelta al servidor. Sólo se muestra
-  si la promesa tiene la cláusula `condicion_credito` aceptada -- esa es la
-  señal estructurada de que hay crédito hipotecario, no un campo nuevo que
-  duplique lo que ya se negoció.
+  es una calculadora, no un dato guardado: vive en `shared/src/timbres.ts`
+  (ver "RUT y timbres viven en `shared/`" más arriba), no acá, para que
+  backend y frontend importen la misma función en vez de mantenerla
+  duplicada. En el frontend corre en el cliente sin ida y vuelta al servidor
+  (`MinutaEscritura.tsx`); sólo se muestra si la promesa tiene la cláusula
+  `condicion_credito` aceptada -- esa es la señal estructurada de que hay
+  crédito hipotecario, no un campo nuevo que duplique lo que ya se negoció.
 
 ## El bot de la ficha
 
@@ -1072,35 +1115,42 @@ su nómina oficial.
 ## Verificación antes de dar algo por listo
 
 ```bash
-npm run type-check -w @trato/backend && npm run type-check -w @trato/frontend
+npm run type-check -w @trato/shared && npm run type-check -w @trato/backend && npm run type-check -w @trato/frontend
 npm run lint -w @trato/backend && npm run lint -w @trato/frontend
 npm run build -w @trato/backend && npm run build -w @trato/frontend
 ```
 
 Para cambios de UI: levantar y mirarlo en el navegador, no sólo compilar.
 
+**`shared` tiene su propio jest**, igual preset que el backend
+(`preset: 'ts-jest'`, `testMatch` sobre `src/**/*.test.ts`). Cubre `rut.ts` y
+`timbres.ts` -- el RUT verificado con los mismos fixtures de siempre (dígito
+verificador calculado con el propio algoritmo, no a ojo) y los timbres contra
+el DL 3.475 (incluido el caso de tope: UF 90.000.000 a 240 meses → 0,8%,
+$720.000). Es el único paquete que backend y frontend importan en vez de
+duplicar, así que sus tests son la única fuente de verdad para esa
+aritmética; ver "RUT y timbres viven en `shared/`" más arriba.
+
 **El backend ya tiene tests**: jest, con `jest.config.js` nuevo
 (`preset: 'ts-jest'`, `testMatch` sobre `src/**/*.test.ts`). Cubren los módulos
 de dominio puro -- sin base de datos, sin mocks -- que concentran las reglas
-legales del proyecto: `utils/rut.ts`, `utils/geo.ts`, `utils/tiempo.ts` (ida y
+legales del proyecto: `utils/geo.ts`, `utils/tiempo.ts` (ida y
 vuelta de zona horaria y los dos cambios de hora de 2026, verificados contra
 el propio motor de `Intl` del runtime, no a ojo), `dominio/documentos.catalogo.ts`,
 `dominio/escritura.ts`, `dominio/brechas.ts`, `dominio/promesa.ts` (el artículo
-1554 completo) y `dominio/minuta.ts` (timbres y estampillas, DL 3.475). Los
+1554 completo) y `dominio/minuta.ts` (el borrador de la escritura; el cálculo
+de timbres se probó al moverse a `shared`). Los
 archivos de test están al lado del código que prueban (`foo.ts` + `foo.test.ts`),
 no en una carpeta aparte.
 
 **El frontend también**: vitest, sin config propio -- corre la lógica pura en
 TypeScript directo, sin necesitar resolver el alias `@/` porque los tests
-importan con ruta relativa, igual que el backend. Cubre la aritmética
-duplicada del lado del cliente que `rut.ts` y `timbres.ts` ya explican por
-qué existe (ley fija, corre sin ida y vuelta al servidor): `lib/rut.ts`,
-`lib/timbres.ts` (mismos DL 3.475 ya verificados en el backend) y
-`lib/comision.ts` (el desglose que arma la calculadora de ahorro de la
-landing). Componentes de React y los que hablan con `fetch` (`lib/api.ts` y
-el resto de `lib/*.ts`) se quedan sin cubrir por ahora: requieren mockear
-React Testing Library o `fetch`, otro nivel de esfuerzo que esta primera
-pasada no incluyó.
+importan con ruta relativa, igual que el backend. Cubre la aritmética que
+sigue siendo sólo del cliente: `lib/comision.ts` (el desglose que arma la
+calculadora de ahorro de la landing). Componentes de React y los que hablan
+con `fetch` (`lib/api.ts` y el resto de `lib/*.ts`) se quedan sin cubrir por
+ahora: requieren mockear React Testing Library o `fetch`, otro nivel de
+esfuerzo que esta primera pasada no incluyó.
 
 **Ningún valor de prueba se inventa.** Un dígito verificador de RUT o un
 instante UTC de un cambio de hora no se escribe a ojo: se calcula con el mismo
@@ -1110,9 +1160,10 @@ entonces se pega como fixture. Mismo principio que "no inventamos cifras
 legales" aplicado a los tests.
 
 ```bash
-npm test -w @trato/backend                     # jest
-npm test -w @trato/backend -- ruta/al.test.ts   # un solo archivo
-npm test -w @trato/frontend                     # vitest
+npm test -w @trato/shared                       # jest
+npm test -w @trato/backend                      # jest
+npm test -w @trato/backend -- ruta/al.test.ts    # un solo archivo
+npm test -w @trato/frontend                      # vitest
 npm test -w @trato/frontend -- ruta/al.test.ts
 ```
 

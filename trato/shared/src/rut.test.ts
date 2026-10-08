@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import { calcularDigitoVerificador, esRutValido, formatearRut, limpiarRut } from './rut';
 
 describe('limpiarRut', () => {
@@ -43,8 +42,8 @@ describe('esRutValido', () => {
   it('rechaza formatos que no son un RUT', () => {
     expect(esRutValido('')).toBe(false);
     expect(esRutValido('abcdefgh-5')).toBe(false);
-    expect(esRutValido('123-5')).toBe(false);
-    expect(esRutValido('123456789012-5')).toBe(false);
+    expect(esRutValido('123-5')).toBe(false); // cuerpo muy corto
+    expect(esRutValido('123456789012-5')).toBe(false); // cuerpo muy largo
   });
 });
 
@@ -57,5 +56,10 @@ describe('formatearRut', () => {
 
   it('no le importa que ya venga con formato (limpia primero)', () => {
     expect(formatearRut('12.345.678-5')).toBe('12.345.678-5');
+  });
+
+  it('no revienta con un input demasiado corto para tener dígito verificador', () => {
+    expect(formatearRut('')).toBe('');
+    expect(formatearRut('5')).toBe('5');
   });
 });

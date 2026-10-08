@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import { calcularTimbres, TASA_TIMBRES_MENSUAL, TASA_TIMBRES_TOPE } from './timbres';
 
 describe('calcularTimbres', () => {

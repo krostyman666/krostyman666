@@ -3,7 +3,7 @@ import { Op } from 'sequelize';
 import { Usuario, hashearPassword, type Rol } from '../models/Usuario';
 import { firmarToken } from '../utils/jwt';
 import { ErrorApi } from '../utils/ErrorApi';
-import { limpiarRut } from '../utils/rut';
+import { limpiarRut } from '@trato/shared';
 
 // Comparacion contra un hash descartable cuando el email no existe, para que
 // responder "no existe" tarde lo mismo que responder "clave incorrecta".

@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { api, guardarToken, mensajeDeError } from '@/lib/api';
-import { esRutValido, formatearRut, limpiarRut } from '@/lib/rut';
+import { esRutValido, formatearRut, limpiarRut } from '@trato/shared';
 
 const esquema = z.object({
   nombre: z.string().trim().min(2, 'Mínimo 2 caracteres'),
