@@ -31,7 +31,7 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Derechos del titular: acceso, rectificación, supresión, oposición, portabilidad | Listo, probado en navegador |
 | Registro de actividades de tratamiento y plazos de conservación | Listo; la purga de lo vencido ahora se puede ejecutar (`/datos-vencidos`, admin), aunque sigue siendo un botón que alguien aprieta, no un cron |
 | Notificación de brechas de seguridad en 72 horas | Listo, probado en navegador (`/incidentes`, admin) |
-| Conexión a SII y Tesorería para avalúo y contribuciones | Listo el conector y la carga manual (`/datos-externos`), que es la vía real hoy. Tesorería: workflow de n8n con arquitectura asíncrona (Firecrawl Agent: arranque + sondeo corto repetido) **probado en vivo contra el servicio real y funcionando de punta a punta** (ROL 711-59, Las Condes). El backend ya tiene URL pública (`https://trato-backend.vercel.app/api/v1`, ver "Despliegue del backend en Vercel") y `Config.baseUrl` ya apunta ahí; falta crear la credencial de la API key en n8n y activar el workflow, ver la nota adhesiva del propio workflow. SII: sigue bloqueado por anti-bot |
+| Conexión a SII y Tesorería para avalúo y contribuciones | Listo el conector y la carga manual (`/datos-externos`), que sigue siendo el colchón si el flujo automático falla. **Tesorería: activado en producción** -- workflow de n8n con arquitectura asíncrona (Firecrawl Agent: arranque + sondeo corto repetido), corre todos los días a las 6:00 (hora UTC). SII: sigue bloqueado por anti-bot |
 | Bot de preguntas del comprador, con cola interna de derivaciones | Listo, probado en navegador |
 | Promesa: negociación de cláusulas entre las partes | Listo, probado en navegador |
 | Firma de la promesa por ambas partes | Listo con firma electrónica simple; FEA pendiente de proveedor |
@@ -515,13 +515,29 @@ documentada, pero ambos son consultables por cualquiera, no sólo por el dueño.
 - **Quién puebla la caché**: para Tesorería hay un workflow de n8n real,
   armado y guardado -- no sólo documentado -- en la cuenta de n8n del dueño
   del proyecto: ["Trato - Contribuciones (Tesorería)"](https://krostyman666.app.n8n.cloud/workflow/neHHeekLAE0LtnDj),
-  **probado en vivo contra el servicio real y confirmado funcionando de
-  punta a punta**. `Config.baseUrl` ya apunta al backend real
+  **probado en vivo contra el servicio real, confirmado funcionando de
+  punta a punta, y activado en producción** (corre todos los días a las
+  6:00 UTC). `Config.baseUrl` apunta al backend real
   (`https://trato-backend.vercel.app/api/v1`, ver "Despliegue del backend en
-  Vercel"); falta sólo crear en n8n la credencial con la API key de
-  integración y activar el workflow -- ya no por falta de un backend
-  público, que es justo lo que se resolvió. Lista las propiedades
-  pendientes y, por cada una, corre el paso de Tesorería.
+  Vercel") con la credencial de integración ya creada y asignada a los dos
+  nodos HTTP que la necesitan. Lista las propiedades pendientes y, por cada
+  una, corre el paso de Tesorería.
+  - **Bug encontrado y corregido recién al activar: faltaba desenvolver el
+    array de propiedades.** `GET /integraciones/propiedades-pendientes`
+    responde `{"propiedades": [...]}`, un solo item que envuelve el array
+    completo. El loop que itera una por una (`Recorrer propiedades`,
+    `splitInBatches`) necesita un item por propiedad, no un item que
+    contenga a todas. Sin un paso intermedio, el loop tomaba ese único
+    wrapper como si fuera "una propiedad" y el siguiente nodo reventaba en
+    `rolAvaluo.split("-")` porque ese campo no existe en el wrapper -- un
+    error que sólo se iba a ver la primera vez que corriera con datos
+    reales, nunca antes porque el flujo no se había ejecutado contra el
+    backend real hasta ahora. Se agregó un nodo **Split Out** (campo
+    `propiedades`) entre "Listar propiedades pendientes" y "Recorrer
+    propiedades" que convierte el array en items individuales. Verificado
+    ejecutando el workflow completo dos veces vía MCP: la primera reprodujo
+    el error tal cual se describe arriba, la segunda (ya con el Split Out)
+    terminó en éxito.
   - **Primera versión (descartada): una sola llamada síncrona.** Usaba un
     agente de navegador de Browserbase (`resource: agent`, `operation:
     execute`) que hacía toda la tarea de una vez -- navegar, llenar el
