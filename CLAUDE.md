@@ -27,7 +27,7 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Consentimiento del vendedor para divulgar antecedentes | Listo, probado en navegador |
 | Modelo de rentabilidad por venta cerrada (`/economia`, admin) | Listo, probado en navegador |
 | Cobro del informe por transferencia, con conciliación manual | Listo, probado en navegador |
-| Cobro con tarjeta (Flow) | Pendiente — falta contratar y poner credenciales |
+| Cobro con tarjeta (Flow) | Código listo (`flow.service.ts`): crea la orden real y confirma el pago volviendo a preguntarle a Flow por el estado, nunca confiando en el aviso solo. Pendiente sólo la cuenta de comercio -- un registro de empresa en sandbox.flow.cl que no se hace por API |
 | Derechos del titular: acceso, rectificación, supresión, oposición, portabilidad | Listo, probado en navegador |
 | Registro de actividades de tratamiento y plazos de conservación | Listo; la purga de lo vencido ahora se puede ejecutar (`/datos-vencidos`, admin), aunque sigue siendo un botón que alguien aprieta, no un cron |
 | Notificación de brechas de seguridad en 72 horas | Listo, probado en navegador (`/incidentes`, admin) |
@@ -36,7 +36,7 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Promesa: negociación de cláusulas entre las partes | Listo, probado en navegador |
 | Firma de la promesa por ambas partes | Listo con firma electrónica simple; FEA pendiente de proveedor |
 | Compraventa y escritura | La promesa se cierra sola al aprobar la escritura, y la propiedad pasa a vendida al aprobar la inscripción. Borrador de la minuta y calculadora de timbres y estampillas, listos y probados en navegador |
-| Subida de archivos de documentos | Listo, probado en navegador; a disco local hasta conectar S3 |
+| Subida de archivos de documentos | Listo, probado en navegador y verificado en producción contra Vercel Blob (subida + descarga byte a byte idénticas) |
 | Aviso de vencimiento de certificados por correo | Listo, probado en navegador con un SMTP real de prueba; sin credenciales SMTP en `.env`, el envío se intenta y se reporta como no enviado -- no se simula |
 | Integraciones externas | Pendiente — ver doc de integraciones |
 
@@ -285,6 +285,14 @@ proveedor, no pausar o pagar por ese otro proyecto.
   `GET /api/v1/integraciones/propiedades-pendientes` con el header
   `x-integracion-key` autentica y responde `{"propiedades":[]}` (vacío
   porque todavía no hay propiedades con rol de avalúo cargado).
+- **`BACKEND_URL`** es la URL pública propia (`https://trato-backend.vercel.app`),
+  separada de `FRONTEND_URL`: la necesita `pagos.service.ts` para construir la
+  `urlConfirmation` que le pasa a Flow (ver "Cobro"), porque esa URL la llama
+  Flow desde afuera, no el navegador del comprador.
+- **Vercel Blob** (store `trato-documentos`, región `gru1`, access privado)
+  está linkeado al proyecto para el almacenamiento de documentos -- ver "Los
+  archivos del expediente". `BLOB_READ_WRITE_TOKEN` no se puso a mano: Vercel
+  lo inyecta solo al linkear el store.
 
 ## Seguridad (implementado)
 
@@ -353,10 +361,23 @@ decide qué se acepta. Cuatro reglas:
   Observarlo sí se puede: "falta subir el archivo" es justamente lo que hay que
   decirle al vendedor.
 
-El driver es `local` y escribe al disco del backend, que alcanza para
-desarrollo. En producción hay que pasar a S3 (llaves ya reservadas): el disco
-del contenedor es efímero y no se comparte entre instancias. El resto del código
-habla con `almacenamiento`, no con el disco, para que ese cambio sea un archivo.
+El driver es `local` (escribe al disco del backend) en desarrollo y
+`vercel-blob` en producción. **Esto dejó de ser un "hay que pasar a S3"
+pendiente: ya está migrado.** El disco de una función serverless es efímero y
+no se comparte entre invocaciones, así que las subidas quedaban rotas desde
+que el backend se desplegó en Vercel -- un bug activo en producción, no sólo
+deuda técnica, hasta que se corrigió. El plan original hablaba de S3 (las
+llaves AWS siguen en `.env.example` por si hace falta volver a eso); Vercel
+Blob resultó el camino más directo porque Vercel inyecta
+`BLOB_READ_WRITE_TOKEN` solo al linkear un store al proyecto, sin crear una
+cuenta AWS aparte ni manejar llaves de acceso de larga duración. El store
+(`trato-documentos`, región `gru1`) se creó con **access privado**: `put`/`get`
+no devuelven una URL utilizable sin el token del servidor, mismo principio de
+"los archivos nunca son públicos" de arriba. Verificado de punta a punta
+contra producción: registro, creación de propiedad, subida de un documento
+real y descarga, con los bytes idénticos byte a byte (`md5sum` igual en
+ambos). El resto del código sigue hablando con `almacenamiento`, no con el
+proveedor, así que un futuro cambio de proveedor vuelve a ser un archivo.
 
 ### Aviso de vencimiento por correo
 
@@ -888,17 +909,41 @@ que conviene no revertir sin cotizar de nuevo:
   la transferencia en 0,99% + IVA. En un cobro de $100.000 eso es la diferencia
   entre pagar $1.200 y pagar $4.200.
 
-Mientras no haya credenciales se cobra por transferencia con conciliación
-manual, que es como opera buena parte del comercio chico en Chile. El flujo está
-completo y el proveedor entra sin rehacerlo.
+**La integración con Flow ya está escrita, no sólo planeada.**
+`backend/src/services/flow.service.ts` firma cada llamada con el HMAC-SHA256
+que exige la API de Flow (parámetros ordenados alfabéticamente, concatenados
+clave+valor, HMAC con `secretKey`), crea la orden real
+(`POST /payment/create`) y expone `consultarEstado` para `getStatus`. Cuando
+el comprador elige "webpay" y hay credenciales, `pagos.service.ts#iniciar`
+crea la orden contra Flow y devuelve la URL de checkout en vez de dejar el
+cobro esperando conciliación manual. La confirmación
+(`POST /api/v1/pagos/flow/confirmacion`, pública, sin JWT -- la llama Flow, no
+un usuario) **nunca confía en el aviso por sí solo**: siempre vuelve a
+preguntarle a Flow por el estado real con `getStatus` antes de marcar algo
+como pagado, mismo principio que "no confiar en que el agente clasifique el
+estado" ya aplicado al workflow de Tesorería -- cualquiera podría golpear ese
+endpoint con un token inventado. La firma HMAC tiene tests con fixtures
+calculados con Node `crypto`, no inventados (`flow.service.test.ts`).
+
+**Lo único que falta es la cuenta de comercio**, y no es algo que se resuelva
+por API: crearla en sandbox.flow.cl es un registro de empresa, con RUT y
+verificación, igual que ya se advertía para Stripe. Mientras `FLOW_API_KEY`/
+`FLOW_SECRET_KEY` estén vacíos (`estaConfigurado()` da `false`), "webpay" no
+se ofrece y se cobra por transferencia con conciliación manual, que es como
+opera buena parte del comercio chico en Chile. El flujo está completo y el
+proveedor entra sin tocar nada más que esas dos variables.
 
 Tres cosas del diseño:
 
 - **El monto se congela en el `Pago`.** Lo cobrado es un hecho fechado y cambiar
   el precio de lista no puede reescribir lo que alguien ya pagó.
-- **La `referencia` es lo que hace calzable la transferencia.** Va sin I, O, 0 ni
-  1 porque el comprador la copia a mano al mensaje del abono y esos cuatro se
-  confunden. Sin ella hay que adivinar de quién es cada depósito.
+- **La `referencia` es lo que hace calzable la transferencia, o el token de
+  Flow.** Para transferencia va sin I, O, 0 ni 1 porque el comprador la copia a
+  mano al mensaje del abono y esos cuatro se confunden; para Flow guarda el
+  token de la orden, que es lo que trae la confirmación y permite volver a
+  preguntar el estado. `urlPago` (columna nueva, nullable) guarda la URL de
+  checkout para no recrear la orden si el comprador recarga la página --
+  Flow no deja reusar un `commerceOrder`.
 - **Conciliar mueve el informe en la misma transacción.** Cobrar y no avanzar el
   informe deja al comprador pagando por nada, así que van juntos o no van.
 - **Un solo cobro abierto por informe.** Dos referencias vivas para la misma
@@ -1191,6 +1236,7 @@ PATCH /api/v1/pagos/:id/reportar             Bearer (comprador) → "ya transfer
 GET   /api/v1/pagos/por-conciliar            Bearer, rol admin
 PATCH /api/v1/pagos/:id/conciliar            Bearer, rol admin → pago pagado + informe en preparación
 PATCH /api/v1/pagos/:id/anular               Bearer, rol admin { motivo }
+POST  /api/v1/pagos/flow/confirmacion        público, sin JWT -- la llama Flow; ver "Cobro"
 
 GET   /api/v1/mis-datos/registro             público: qué tratamos, para qué y por cuánto
 GET   /api/v1/mis-datos/exportar             Bearer → JSON completo (acceso y portabilidad)

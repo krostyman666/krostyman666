@@ -144,6 +144,12 @@ export async function iniciar(
  * no recibe eso, reintenta la notificación indefinidamente.
  */
 export async function confirmarFlow(token: string): Promise<void> {
+  // Es un endpoint público: cualquiera puede llamarlo con cualquier token.
+  // Sin credenciales de Flow ninguna orden real pudo haberse creado, así que
+  // no vale la pena gastar una llamada de red en algo que no puede ser
+  // legítimo.
+  if (!flow.estaConfigurado()) return;
+
   const estado = await flow.consultarEstado(token);
 
   await sequelize.transaction(async (t) => {
