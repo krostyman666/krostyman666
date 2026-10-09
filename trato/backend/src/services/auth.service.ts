@@ -32,9 +32,13 @@ export async function registrar(datos: DatosRegistro): Promise<SesionCreada> {
     where: { [Op.or]: [{ email }, { rut }] },
   });
 
+  // No se distingue si chocó el email o el RUT: decirlo permitiría probar
+  // RUTs de terceros (dato público, como la cédula) para descubrir si una
+  // persona puntual ya tiene cuenta en Trato -- mismo principio anti-
+  // enumeración que ya usa el login con el hash señuelo, aplicado acá al
+  // único otro punto donde un dato ajeno se puede probar por descarte.
   if (existente) {
-    const campo = existente.email === email ? 'email' : 'RUT';
-    throw ErrorApi.conflicto(`Ya existe una cuenta con ese ${campo}`, 'cuenta_duplicada');
+    throw ErrorApi.conflicto('Ya existe una cuenta con esos datos', 'cuenta_duplicada');
   }
 
   const usuario = await Usuario.create({
