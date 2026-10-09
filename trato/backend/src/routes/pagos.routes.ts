@@ -21,6 +21,11 @@ const anularSchema = Joi.object({
 
 const router = Router();
 
+// Sin autenticar: la llama Flow directamente, no un usuario de la plataforma.
+// La autenticación real es la firma que `confirmarFlow` verifica volviendo a
+// preguntarle a Flow por el estado -- ver pagos.service.ts.
+router.post('/flow/confirmacion', controlador.confirmacionFlow);
+
 router.get('/por-conciliar', autenticar, exigirRol('admin'), controlador.porConciliar);
 
 router.get('/informe/:informeId', autenticar, controlador.medios);

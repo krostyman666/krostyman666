@@ -39,8 +39,12 @@ export class Pago extends Model<InferAttributes<Pago>, InferCreationAttributes<P
   declare proveedor: ProveedorPago;
   declare estado: CreationOptional<EstadoPago>;
 
-  /** Código para calzar la transferencia, o el id de la orden del proveedor. */
+  /** Código para calzar la transferencia, o el token de la orden de Flow. */
   declare referencia: string;
+  /** La URL de checkout de Flow, para no tener que recrear la orden si el
+   * comprador recarga la página antes de pagar (Flow no deja reusar un
+   * `commerceOrder`, así que una segunda orden para el mismo `Pago` fallaría). */
+  declare urlPago: CreationOptional<string | null>;
 
   /** Lo que el comprador dice haber transferido, para que alguien lo revise. */
   declare reportadoEn: CreationOptional<Date | null>;
@@ -69,6 +73,7 @@ Pago.init(
     },
 
     referencia: { type: DataTypes.STRING(40), allowNull: false, unique: true },
+    urlPago: { type: DataTypes.STRING(500), allowNull: true },
 
     reportadoEn: { type: DataTypes.DATE, allowNull: true },
     pagadoEn: { type: DataTypes.DATE, allowNull: true },

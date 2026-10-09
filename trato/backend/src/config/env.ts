@@ -17,6 +17,8 @@ export const env = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: Number(process.env.BACKEND_PORT ?? 3001),
   frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:3000',
+  /** La URL pública propia, para construir la urlConfirmation que Flow llama. */
+  backendUrl: process.env.BACKEND_URL ?? 'http://localhost:3001',
   databaseUrl: requerido('DATABASE_URL'),
   /**
    * Conexiones máximas del pool por proceso. En serverless (Vercel) cada
@@ -49,6 +51,18 @@ export const env = {
     titular: process.env.COBRO_TITULAR ?? '',
     rut: process.env.COBRO_RUT ?? '',
     email: process.env.COBRO_EMAIL ?? '',
+  },
+
+  /**
+   * Flow: el agregador que da Webpay sin que Trato pase por la certificación
+   * de Transbank (ver `dominio/pagos.ts`). Sin `apiKey`/`secretKey` el medio
+   * "webpay" no se ofrece -- no hay nada que simular con cuentas de sandbox
+   * que nadie creó todavía.
+   */
+  flow: {
+    apiKey: process.env.FLOW_API_KEY ?? '',
+    secretKey: process.env.FLOW_SECRET_KEY ?? '',
+    baseUrl: process.env.FLOW_BASE_URL ?? 'https://sandbox.flow.cl/api',
   },
 
   /**

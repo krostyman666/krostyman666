@@ -41,6 +41,27 @@ export const iniciar: RequestHandler = async (req, res, next) => {
   }
 };
 
+/**
+ * Lo que llama Flow al terminar el pago, con sólo el token en el cuerpo
+ * (`application/x-www-form-urlencoded`). Siempre responde "OK" en texto
+ * plano -- es lo que Flow espera para no reintentar la notificación -- aun
+ * si el token no corresponde a nada: eso ya lo decide `confirmarFlow`, no
+ * esta respuesta.
+ */
+export const confirmacionFlow: RequestHandler = async (req, res) => {
+  const token = typeof req.body?.token === 'string' ? req.body.token : null;
+  if (token) {
+    try {
+      await servicio.confirmarFlow(token);
+    } catch {
+      // Un fallo acá no puede dejar a Flow reintentando para siempre un
+      // token que de todas formas no se va a poder procesar distinto la
+      // próxima vez; queda para revisar a mano en los logs.
+    }
+  }
+  res.status(200).send('OK');
+};
+
 export const reportar: RequestHandler = async (req, res, next) => {
   try {
     const pago = await servicio.reportar(req.params.pagoId, exigirAuth(req), req.body.nota);

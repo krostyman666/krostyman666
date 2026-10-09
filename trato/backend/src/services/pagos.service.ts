@@ -7,6 +7,7 @@ import { Propiedad } from '../models/Propiedad';
 import { Usuario } from '../models/Usuario';
 import { env, cuentaDeCobroConfigurada } from '../config/env';
 import { ErrorApi } from '../utils/ErrorApi';
+import * as flow from './flow.service';
 import {
   MEDIOS,
   MEDIO_POR_CODIGO,
@@ -33,7 +34,7 @@ export function mediosDisponibles(monto: number) {
   return MEDIOS.filter((m) => {
     if (m.medio === 'transferencia') return cuentaDeCobroConfigurada();
     // Webpay necesita credenciales de Flow.
-    return Boolean(process.env.FLOW_API_KEY);
+    return flow.estaConfigurado();
   }).map((m) => ({
     medio: m.medio,
     nombre: m.nombre,
@@ -84,7 +85,7 @@ export async function iniciar(
   if (medio === 'transferencia' && !cuentaDeCobroConfigurada()) {
     throw ErrorApi.conflicto('La transferencia no está habilitada todavía');
   }
-  if (definicion.proveedor === 'flow' && !process.env.FLOW_API_KEY) {
+  if (definicion.proveedor === 'flow' && !flow.estaConfigurado()) {
     throw ErrorApi.conflicto('El pago con tarjeta no está habilitado todavía');
   }
 
@@ -92,6 +93,36 @@ export async function iniciar(
   // deuda es la receta para cobrar dos veces o conciliar la equivocada.
   const abierto = await Pago.findOne({ where: { informeId, estado: 'pendiente' } });
   if (abierto) return abierto;
+
+  if (definicion.proveedor === 'flow') {
+    const comprador = await Usuario.findByPk(compradorId);
+    if (!comprador) throw ErrorApi.noEncontrado('Comprador no encontrado');
+
+    // El Pago nace primero (sin referencia ni urlPago todavía) porque Flow
+    // exige un commerceOrder único por orden, y el id del propio Pago es la
+    // forma más simple de garantizar eso sin inventar un contador aparte.
+    const pago = await Pago.create({
+      informeId,
+      compradorId,
+      monto: informe.precioClp,
+      medio,
+      proveedor: definicion.proveedor,
+      referencia: crypto.randomUUID(),
+    });
+
+    const orden = await flow.crearOrdenPago({
+      commerceOrder: pago.id,
+      subject: `Informe de títulos Trato - propiedad ${informe.propiedadId}`,
+      amount: informe.precioClp,
+      email: comprador.email,
+      urlConfirmation: `${env.backendUrl}/api/v1/pagos/flow/confirmacion`,
+      urlReturn: `${env.frontendUrl}/propiedades/${informe.propiedadId}`,
+    });
+
+    // `referencia` pasa a guardar el token de Flow: es lo que trae la
+    // confirmación y lo que permite volver a consultar el estado.
+    return pago.update({ referencia: orden.token, urlPago: `${orden.url}?token=${orden.token}` });
+  }
 
   return Pago.create({
     informeId,
@@ -101,6 +132,51 @@ export async function iniciar(
     medio,
     proveedor: definicion.proveedor,
     referencia: referencia(),
+  });
+}
+
+/**
+ * Lo que llama Flow (`urlConfirmation`) al terminar el pago, con sólo el
+ * token en el cuerpo. Nunca confía en el aviso por sí solo -- cualquiera
+ * podría llamar a este endpoint con un token ajeno -- así que siempre
+ * vuelve a preguntarle a Flow por el estado real antes de marcar algo como
+ * pagado. Responde "OK" en el controller sin importar qué pasó acá: si Flow
+ * no recibe eso, reintenta la notificación indefinidamente.
+ */
+export async function confirmarFlow(token: string): Promise<void> {
+  const estado = await flow.consultarEstado(token);
+
+  await sequelize.transaction(async (t) => {
+    const pago = await Pago.findOne({
+      where: { referencia: token, proveedor: 'flow' },
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+    if (!pago) return; // token desconocido: nada que confirmar.
+    if (pago.estado !== 'pendiente') return; // ya se procesó esta notificación.
+
+    if (estado.status === flow.ESTADOS_FLOW.PAGADA) {
+      const informe = await Informe.findByPk(pago.informeId, { transaction: t });
+      if (!informe) return;
+
+      await informe.update(
+        { estado: 'en_preparacion', pagadoEn: new Date() },
+        { transaction: t },
+      );
+      await pago.update(
+        { estado: 'pagado', pagadoEn: new Date(), nota: 'Confirmado automáticamente por Flow' },
+        { transaction: t },
+      );
+    } else if (
+      estado.status === flow.ESTADOS_FLOW.RECHAZADA ||
+      estado.status === flow.ESTADOS_FLOW.ANULADA
+    ) {
+      await pago.update(
+        { estado: 'anulado', nota: 'Rechazado o anulado por Flow' },
+        { transaction: t },
+      );
+    }
+    // PENDIENTE: no hay nada que cambiar todavía.
   });
 }
 
