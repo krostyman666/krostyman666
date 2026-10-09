@@ -53,16 +53,14 @@ export const env = {
 
   /**
    * Dónde se guardan los archivos del expediente. `local` escribe al disco del
-   * backend y sirve para desarrollo; en producción hay que pasar a `s3` (las
-   * llaves AWS ya están reservadas en `.env.example`), porque el disco del
-   * contenedor es efímero y no se comparte entre instancias. Nunca son públicos:
-   * son los papeles legales del vendedor y se sirven por endpoint autenticado.
+   * backend y sirve para desarrollo; en producción es `vercel-blob` (ver
+   * `almacenamiento.service.ts`), porque el disco del contenedor serverless es
+   * efímero y no se comparte entre invocaciones. Nunca son públicos: son los
+   * papeles legales del vendedor y se sirven por endpoint autenticado.
    */
   almacenamiento: {
-    driver: (process.env.ALMACENAMIENTO_DRIVER ?? 'local') as 'local' | 's3',
+    driver: (process.env.ALMACENAMIENTO_DRIVER ?? 'local') as 'local' | 'vercel-blob',
     dirLocal: process.env.ALMACENAMIENTO_DIR ?? path.resolve(__dirname, '../../../almacenamiento'),
-    s3Bucket: process.env.AWS_S3_BUCKET ?? '',
-    s3Region: process.env.AWS_REGION ?? '',
   },
 
   /**

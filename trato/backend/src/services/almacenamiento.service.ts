@@ -1,17 +1,23 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { put, get, del } from '@vercel/blob';
 import { env } from '../config/env';
 import { ErrorApi } from '../utils/ErrorApi';
 
 /**
  * Guarda y sirve los archivos del expediente.
  *
- * Hay una sola implementación —disco local— y una interfaz, a propósito: en
- * producción el disco del contenedor es efímero y no se comparte entre
- * instancias, así que hay que pasar a almacenamiento de objetos (S3, cuyas
- * llaves ya están en `.env.example`). El resto del código habla con
- * `almacenamiento`, no con el disco, para que ese cambio sea un archivo y no una
- * cirugía.
+ * Dos implementaciones detrás de una interfaz: disco local (desarrollo) y
+ * Vercel Blob (producción, driver `vercel-blob`). El plan original decía "S3"
+ * -- y las llaves AWS se dejaron reservadas en `.env.example` por si hay que
+ * volver a eso -- pero una vez que el backend quedó desplegado como función
+ * de Vercel, Vercel Blob resultó el camino más directo: `BLOB_READ_WRITE_TOKEN`
+ * lo inyecta Vercel solo al linkear el store al proyecto (sin crear una cuenta
+ * AWS aparte ni manejar llaves de acceso de larga duración), y el store se creó
+ * con `access: 'private'` -- ni `put` ni `get` devuelven una URL que alguien
+ * pueda abrir sin el token del servidor. El resto del código habla con
+ * `almacenamiento`, no con el proveedor, para que ese cambio sea un archivo y
+ * no una cirugía.
  *
  * DOS COSAS QUE NO SON NEGOCIABLES:
  *
@@ -75,14 +81,12 @@ export async function guardar(
   const ext = EXTENSION[tipo] ?? 'bin';
   const clave = `expediente/${propiedadId}/${documentoId}-${Date.now()}.${ext}`;
 
-  if (env.almacenamiento.driver === 's3') {
-    // Slot para S3: subir a `env.almacenamiento.s3Bucket` con la misma clave y
-    // ContentType, sin ACL pública. La clave que se devuelve no cambia, así que
-    // nada más del código se entera del proveedor.
-    throw ErrorApi.solicitudInvalida(
-      'El almacenamiento S3 todavía no está configurado',
-      'almacenamiento_no_configurado',
-    );
+  if (env.almacenamiento.driver === 'vercel-blob') {
+    // La clave es el pathname del blob tal cual: sin sufijo aleatorio (ya es
+    // única por el timestamp) y privado, así que `put` no devuelve una URL
+    // utilizable sin el token del servidor.
+    await put(clave, contenido, { access: 'private', contentType: tipo });
+    return { clave, tipo, bytes: contenido.length };
   }
 
   const destino = resolverLocal(clave);
@@ -93,11 +97,16 @@ export async function guardar(
 }
 
 export async function leer(clave: string): Promise<Buffer> {
-  if (env.almacenamiento.driver === 's3') {
-    throw ErrorApi.solicitudInvalida(
-      'El almacenamiento S3 todavía no está configurado',
-      'almacenamiento_no_configurado',
-    );
+  if (env.almacenamiento.driver === 'vercel-blob') {
+    const resultado = await get(clave, { access: 'private' });
+    if (!resultado || resultado.statusCode !== 200) {
+      throw ErrorApi.noEncontrado('El archivo ya no está disponible');
+    }
+    const partes: Buffer[] = [];
+    for await (const trozo of resultado.stream) {
+      partes.push(Buffer.from(trozo));
+    }
+    return Buffer.concat(partes);
   }
 
   try {
@@ -112,7 +121,14 @@ export async function leer(clave: string): Promise<Buffer> {
  * subir el reemplazo. */
 export async function eliminar(clave: string | null): Promise<void> {
   if (!clave) return;
-  if (env.almacenamiento.driver === 's3') return;
+  if (env.almacenamiento.driver === 'vercel-blob') {
+    try {
+      await del(clave);
+    } catch {
+      /* huérfano tolerado */
+    }
+    return;
+  }
   try {
     await fs.unlink(resolverLocal(clave));
   } catch {
