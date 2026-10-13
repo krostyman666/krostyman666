@@ -62,8 +62,61 @@ npm install
 npm run dev                   # backend :3001 + frontend :3000
 ```
 
-En desarrollo el backend hace `sequelize.sync({ alter: true })`; en producción
-hay que pasar a migraciones antes del primer deploy.
+En desarrollo el backend sigue haciendo `sequelize.sync({ alter: true })` para
+iterar rápido sobre los modelos sin escribir una migración por cada cambio.
+**Producción ya no depende de ese `sync` manual: tiene su propio sistema de
+migraciones**, ver "Migraciones" más abajo.
+
+## Migraciones
+
+`backend/src/db/migrador.ts` + `backend/src/db/migraciones/`. Reemplaza al
+`sequelize.sync({ alter: true })` corrido a mano contra Neon (ver "Despliegue
+del backend en Vercel") como camino para cambiar el esquema en producción.
+
+**Sin dependencias nuevas.** Se evaluó `umzug` primero y se descartó: trae
+`@rushstack/ts-command-line` (para una CLI que no hace falta, porque el
+runner propio ya cubre `up`/`down`/`status`) y esa cadena arrastra
+`sprintf-js` vulnerable sin parche publicado -- agregaba una vulnerabilidad
+moderada nueva a producción (`npm audit --omit=dev` pasó de 2 a 6), el mismo
+patrón que `braces`/`micromatch` que el proyecto ya evitó dos veces (ver
+"Decisiones tomadas"). Sequelize ya sabe hablar con Postgres, así que una
+tabla de control (`migraciones`: nombre + fecha) y una lista ordenada de
+pasos con `up`/`down` alcanzan.
+
+- **`0001_baseline`** no está escrita a mano: es un volcado real
+  (`pg_dump --schema-only`) de la base de desarrollo después de
+  `sync({ alter: true })` con los modelos actuales, embebido como string en
+  el propio archivo de la migración. Transcribir 16 modelos a
+  `queryInterface.createTable` uno por uno arriesga discrepancias sutiles
+  (precisión de columnas, nombres de índice, los `ON DELETE`/`ON UPDATE`
+  reales de cada asociación) que un volcado del esquema que ya corre no
+  tiene. Verificado aplicando ese SQL contra una base nueva y vacía: crea
+  las mismas 16 tablas, comparadas una por una contra la base original.
+- **Neon (producción) y cualquier base de desarrollo de antes de este
+  sistema no corren el `up()` de la baseline.** Las tablas ya existen ahí,
+  creadas por el `sync` de una vez. En esos casos la migración se marca como
+  aplicada a mano, sin ejecutar su SQL:
+  `INSERT INTO migraciones (nombre) VALUES ('0001_baseline');`. Hecho así en
+  la base de desarrollo local de este sandbox; pendiente hacerlo contra Neon
+  antes de que la próxima migración intente correr ahí.
+- **Cada migración nueva se agrega a mano** a la lista ordenada en
+  `backend/src/db/migraciones/index.ts` (no hay escaneo de directorio, para
+  no depender de que el nombre de archivo compile igual en `tsx`, que lee
+  `.ts` en dev, y en `dist`, que lee `.js`). Convención de nombre:
+  `NNNN_descripcion`, orden alfabético = orden de ejecución.
+- `up`/`down` corren en una transacción cada una; `down` sólo deshace la
+  última migración aplicada, no una cadena completa.
+
+```bash
+npm run migrate -w @trato/backend          # aplica las pendientes
+npm run migrate:status -w @trato/backend   # lista aplicadas y pendientes
+npm run migrate:down -w @trato/backend     # deshace sólo la última
+```
+
+Verificado de punta a punta: `up` contra una base nueva crea las 16 tablas
+(idénticas a la base de desarrollo original), `status` lee bien aplicadas y
+pendientes, `up` repetido no hace nada, `down` deshace limpio, y lo mismo
+corriendo desde `dist/` compilado (no sólo con `tsx`).
 
 ## Decisiones tomadas
 
@@ -274,9 +327,9 @@ proveedor, no pausar o pagar por ese otro proyecto.
   a mano** (en un sandbox con acceso de red real a Postgres, no desde el
   camino de producción -- el guard `esProduccion` sigue impidiendo que el
   servidor lo haga solo al arrancar) contra la base nueva de Neon. Creó las
-  16 tablas del modelo. **Esto no es un sistema de migraciones**: sigue
-  pendiente pasar a uno de verdad antes de que el esquema cambie en
-  producción, como ya advertía la nota de "Correr el proyecto" más arriba.
+  16 tablas del modelo. Ese `sync` de una vez ya no es el único camino: desde
+  la migración `0001_baseline` (ver "Migraciones" más abajo) cualquier cambio
+  de esquema siguiente pasa por ahí, no por otro `sync` a mano.
 - **Vercel Authentication (SSO) se desactivó** en el proyecto: por defecto
   protege todos los deploys detrás de un login de Vercel, lo que bloqueaba
   que n8n (o cualquier cliente externo) llamara a `/api/v1/integraciones/*`

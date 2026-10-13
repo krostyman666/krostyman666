@@ -11,7 +11,10 @@
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "migrate": "tsx src/scripts/migrar.ts up",
+    "migrate:down": "tsx src/scripts/migrar.ts down",
+    "migrate:status": "tsx src/scripts/migrar.ts status"
   },
   "dependencies": {
     "@vercel/blob": "^2.8.1",
