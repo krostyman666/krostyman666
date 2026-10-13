@@ -96,9 +96,11 @@ pasos con `up`/`down` alcanzan.
   sistema no corren el `up()` de la baseline.** Las tablas ya existen ahí,
   creadas por el `sync` de una vez. En esos casos la migración se marca como
   aplicada a mano, sin ejecutar su SQL:
-  `INSERT INTO migraciones (nombre) VALUES ('0001_baseline');`. Hecho así en
-  la base de desarrollo local de este sandbox; pendiente hacerlo contra Neon
-  antes de que la próxima migración intente correr ahí.
+  `INSERT INTO migraciones (nombre) VALUES ('0001_baseline');`. Hecho así
+  tanto en la base de desarrollo local como contra Neon (vía el MCP de Neon,
+  confirmado con `SELECT nombre, ejecutada_en FROM migraciones`): la próxima
+  migración real que se agregue va a correr ahí sin tropezar con tablas que
+  ya existen.
 - **Cada migración nueva se agrega a mano** a la lista ordenada en
   `backend/src/db/migraciones/index.ts` (no hay escaneo de directorio, para
   no depender de que el nombre de archivo compile igual en `tsx`, que lee
