@@ -355,10 +355,23 @@ proveedor, no pausar o pagar por ese otro proyecto.
 - JWT firmado con issuer `trato`, expira en 7d
 - Login compara contra un hash señuelo si el email no existe → no revela qué
   correos están registrados, ni por mensaje ni por tiempo de respuesta
-- Rate limit 10 intentos / 15 min en `/registro` y `/ingreso`. El contador vive en
-  memoria del proceso: sirve para una instancia, pero al escalar a varias hay que
-  moverlo a Redis (ya está en docker-compose) o los límites se multiplican por
-  instancia. Además registro e ingreso comparten presupuesto por IP.
+- **Rate limit 10 intentos / 15 min en `/registro` y `/ingreso`, con contador en
+  Redis cuando hay uno configurado.** `backend/src/middleware/limiteIntentos.ts`
+  trae un `Store` propio para `express-rate-limit` (INCR + expira en el primer
+  hit de la ventana, el mismo algoritmo que usa `rate-limit-redis`) en vez de
+  sumar esa librería: su versión actual exige `express-rate-limit >= 8` por
+  peer dependency y el proyecto está en la 7.x, así que forzarla era más
+  riesgo que escribir el store. Sin `REDIS_URL` configurado sigue cayendo al
+  `MemoryStore` de siempre -- sirve para una instancia, igual que antes.
+  Verificado con dos procesos del backend en puertos distintos compartiendo
+  el mismo Redis local: intentos repartidos entre ambos cuentan contra el
+  mismo límite, y sin `REDIS_URL` el fallback a memoria sigue cortando en el
+  intento 11 como siempre. **Falta sólo el Redis de producción**: Vercel no
+  trae uno propio (el store del backend sí está listo), hay que conectar uno
+  administrado (Upstash vía el Marketplace de Vercel, Redis Cloud, u otro) y
+  poner su URL en `REDIS_URL` -- mismo patrón que la cuenta de comercio de
+  Flow: código listo, pendiente sólo contratar el proveedor. Además registro
+  e ingreso comparten presupuesto por IP.
 - Validación Joi (backend) + Zod (frontend), RUT verificado en ambos lados
 - helmet, CORS restringido a `FRONTEND_URL`
 

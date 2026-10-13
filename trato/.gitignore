@@ -36,6 +36,7 @@ yarn-error.log*
 # Database
 *.db
 *.sqlite
+*.rdb
 postgres_data/
 redis_data/
 

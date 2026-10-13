@@ -141,6 +141,16 @@ export const env = {
     smtpPassword: process.env.SMTP_PASSWORD ?? '',
     from: process.env.EMAIL_FROM ?? 'Trato <no-responder@trato.cl>',
   },
+
+  /**
+   * Redis para el límite de intentos de `/registro` e `/ingreso`, compartido
+   * entre instancias (ver "Seguridad" en CLAUDE.md). Sin `REDIS_URL` el
+   * límite sigue viviendo en memoria del proceso -- sirve para una sola
+   * instancia, igual que antes; no se finge un Redis que nadie configuró.
+   */
+  redis: {
+    url: process.env.REDIS_URL ?? '',
+  },
 } as const;
 
 export function cuentaDeCobroConfigurada(): boolean {
