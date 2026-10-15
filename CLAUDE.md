@@ -283,27 +283,76 @@ corriendo desde `dist/` compilado (no sólo con `tsx`).
   latitud/longitud en absoluto.** Por eso toda propiedad nacía sin ubicación
   -- el mapa de arriba nunca tenía nada que dibujar salvo que alguien cargara
   las coordenadas a mano por API. Con `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
-  configurada, el campo "Calle" usa Google Places Autocomplete
-  (`google.maps.places.Autocomplete`, restringido a Chile): al elegir una
-  sugerencia de la lista se completan calle, número, comuna y región
+  configurada, el campo "Calle" usa el autocompletado de Google: al elegir
+  una sugerencia se completan calle, número, comuna y región
   automáticamente, y las coordenadas quedan guardadas para enviarlas en el
   POST. Sin API key el campo sigue siendo un input de texto común, sin
-  ningún cambio de comportamiento -- igual que `MapaResultados` y ahora
+  ningún cambio de comportamiento -- igual que `MapaResultados` y
   `MapaPropiedad`, "ningún código cambia" al agregar la llave después.
-  - **El mapeo de nombres (`lib/direccion.ts`) tiene una limitación
-    reconocida: no se verificó contra una cuenta real de Google Maps.**
-    Sin API key no hay forma de probarlo en vivo, así que `normalizarRegion`
-    (hace calzar lo que Google llama una región, ej. "Región de Valparaíso",
-    contra el enum fijo de `REGIONES`) y la extracción de comuna
-    (`administrative_area_level_3`, con fallback a `locality`) están escritas
-    con el comportamiento documentado de la API de Google, no confirmadas
-    contra una respuesta real. Si no calzan, no se inventa: la región o
-    comuna quedan sin tocar y el vendedor las corrige a mano, como ya podía
-    hacer antes de que existiera el autocompletado -- nunca se manda un valor
-    fuera del enum. **Pendiente: probar con una cuenta real apenas se
-    consiga la API key** y ajustar `normalizarRegion` si algún nombre no
-    calza como se esperaba. La lógica de parseo (no la respuesta de Google en
-    sí) está cubierta por `lib/direccion.test.ts`.
+  **Verificado de punta a punta contra una cuenta real de Google Cloud**
+  (no sólo compilado): escribir "Av. Apoquindo 3000, Las Condes", elegir la
+  sugerencia, y el POST a `/propiedades` llega con `calle`, `numero`,
+  `comuna`, `region` y `latitud`/`longitud` reales -- `201 Created`.
+  - **No usa `google.maps.places.Autocomplete` (el widget clásico): usa
+    `PlaceAutocompleteElement`, y el cambio no fue estilístico sino forzado
+    por un hallazgo real.** El plan original era el widget clásico, y el
+    código se escribió así primero. Al probarlo contra la API key real de
+    producción, Google respondió "You're calling a legacy API, which is not
+    enabled for your project" -- cero sugerencias. La causa:
+    `google.maps.places.Autocomplete` dejó de activarse para proyectos de
+    Google Cloud nuevos desde el 1 de marzo de 2025 (está marcado
+    `@deprecated` en el propio `@types/google.maps` instalado); sólo sigue
+    funcionando para cuentas que ya lo tenían habilitado de antes. No había
+    forma de saber esto sin una cuenta real -- la documentación de Google
+    no lo hace obvio hasta que se prueba. Se migró todo a
+    `google.maps.places.PlaceAutocompleteElement`, confirmado funcionando
+    con la cuenta real del proyecto.
+  - **`PlaceAutocompleteElement` es un *custom element* con shadow DOM
+    cerrado, no una decoración sobre un `<input>` existente como el widget
+    viejo.** Por eso `FormularioPropiedad.tsx` ya no ata nada a un
+    `<input ref={...}>`: cuando hay API key, monta el elemento a mano
+    (`document.createElement` vía `new google.maps.places.PlaceAutocompleteElement(...)`)
+    dentro de un contenedor (`autocompleteContainerRef`), y ese elemento
+    reemplaza por completo al input -- no lo envuelve. El shadow DOM cerrado
+    significa que no se puede leer su input interno con
+    `document.querySelector` ni para pruebas automatizadas: el elemento sí
+    expone `.value` como propiedad pública del host, así que el texto
+    libre (sin elegir sugerencia) se captura escuchando `input` y leyendo
+    `elemento.value`, y la selección completa se captura escuchando
+    `gmp-select` (`event.placePrediction.toPlace()` +
+    `await place.fetchFields({...})`).
+  - **El mapeo de nombres (`lib/direccion.ts`) está verificado contra una
+    respuesta real de Google**, ya no sólo contra el comportamiento
+    documentado. Dos hallazgos reales al probarlo:
+    - **Bug real en `normalizarRegion`: los prefijos a recortar
+      (`PREFIJOS_REGION`) tenían tilde (`'región de '`) pero se comparaban
+      contra `limpio`, que ya había pasado por `sinAcentos` -- el
+      `startsWith` nunca calzaba.** No se notó antes porque el fallback por
+      substring más abajo disimulaba el bug en casi todos los casos: si
+      Google manda "Región de Valparaíso" y el prefijo no se recorta, el
+      string completo (`"region de valparaiso"`) igual *contiene* a
+      `"valparaiso"`, así que el `.includes()` encontraba la región igual,
+      por la razón equivocada. Se rompió con el caso real de la Región
+      Metropolitana (ver más abajo), donde el substring no alcanza. Se
+      corrigió quitando las tildes de `PREFIJOS_REGION`. Un test nuevo en
+      `lib/direccion.test.ts` cubre exactamente este caso.
+    - **Para la Región Metropolitana, Google (Places API New) devuelve
+      literalmente "Región Metropolitana"** -- sin el "de Santiago" que
+      trae el enum `REGIONES` del proyecto. El fallback por substring de
+      `normalizarRegion` ya lo resuelve bien (`"metropolitana de
+      santiago".includes("metropolitana")`), pero es el motivo por el que
+      el bug de arriba sí se manifestaba en este caso puntual.
+    - La extracción de comuna (`administrative_area_level_3`, con fallback
+      a `locality`) se confirmó correcta tal como estaba escrita: para "Av.
+      Apoquindo 3000, Las Condes" ambos campos llegan iguales ("Las
+      Condes"), así que no hubo manera de distinguir con este ejemplo si el
+      fallback a `locality` haría falta alguna vez -- sigue sin probarse
+      con una comuna rural donde difieran.
+  - **Pendiente, sin verificar todavía**: el resto de las 16 regiones de
+    Chile (sólo se probó la Metropolitana en vivo) y comunas donde
+    `administrative_area_level_3` y `locality` no coincidan. El fallback de
+    "no se adivina, se deja en blanco y el vendedor corrige a mano" sigue
+    siendo la red de seguridad si algún nombre no calza.
 - **Mapa de resultados (`MapaResultados`, en `/propiedades`): dos proveedores.**
   Un iframe no sirve para varios pines con comportamiento propio (clic,
   resaltado al pasar el mouse por la tarjeta), así que hace falta una librería

@@ -33,7 +33,14 @@ export async function cargarGoogleMaps(): Promise<void> {
   await Promise.all([importLibrary('maps'), importLibrary('marker')]);
 }
 
-/** Deja listo `google.maps.places.Autocomplete`, para el formulario de publicar. */
+/**
+ * Deja listo `google.maps.places.PlaceAutocompleteElement`, para el
+ * formulario de publicar. No es `google.maps.places.Autocomplete`: ese
+ * widget legacy no está disponible para proyectos nuevos de Google Cloud
+ * desde marzo de 2025 (verificado en vivo contra la cuenta real del
+ * proyecto: "legacy API, which is not enabled for your project", cero
+ * sugerencias) -- ver CLAUDE.md, sección Google Maps.
+ */
 export async function cargarGooglePlaces(): Promise<void> {
   asegurarConfigurado();
   await importLibrary('places');

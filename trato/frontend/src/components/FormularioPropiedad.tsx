@@ -67,6 +67,10 @@ export default function FormularioPropiedad() {
   // en null y la propiedad se publica sin coordenadas, igual que siempre.
   const [ubicacion, setUbicacion] = useState<{ lat: number; lng: number } | null>(null);
   const calleInputRef = useRef<HTMLInputElement | null>(null);
+  // Sólo se usa cuando hay API key: ahí "Calle" no es un <input> normal sino
+  // el custom element de Google (ver el efecto más abajo), así que necesita
+  // un contenedor donde montarlo a mano en vez de JSX declarativo.
+  const autocompleteContainerRef = useRef<HTMLDivElement | null>(null);
 
   const {
     register,
@@ -80,24 +84,41 @@ export default function FormularioPropiedad() {
 
   const { ref: calleRHFRef, ...calleRegistro } = register('calle');
 
-  // Ata el Autocomplete de Google al input de "Calle" apenas hay API key.
-  // Sin key, `hayGoogleMaps` es false y el input se queda como un input
-  // normal -- la dirección sigue siendo 100% editable a mano, como antes de
-  // que existiera esto.
+  // Monta el autocompletado de Google en "Calle" apenas hay API key. Sin
+  // key, `hayGoogleMaps` es false y el campo se queda como un input normal
+  // -- la dirección sigue siendo 100% editable a mano, como antes de que
+  // existiera esto.
+  //
+  // Es `PlaceAutocompleteElement`, no `google.maps.places.Autocomplete`: ese
+  // widget clásico no está disponible para proyectos nuevos de Google Cloud
+  // desde marzo de 2025, confirmado en vivo con la cuenta real de este
+  // proyecto ("legacy API, which is not enabled for your project", cero
+  // sugerencias) -- ver CLAUDE.md. El elemento nuevo es un custom element
+  // con shadow DOM cerrado (no se puede leer su input real con
+  // `document.querySelector`, ni siquiera con el ref), así que se monta a
+  // mano dentro de `autocompleteContainerRef` en vez de declararlo como
+  // JSX, y reemplaza por completo al `<input>` de "Calle" -- no lo decora
+  // como hacía el widget legacy.
   useEffect(() => {
-    if (!hayGoogleMaps) return;
+    if (!hayGoogleMaps || !autocompleteContainerRef.current) return;
     let cancelado = false;
-    let autocomplete: google.maps.places.Autocomplete | undefined;
+    let elemento: google.maps.places.PlaceAutocompleteElement | undefined;
 
     cargarGooglePlaces().then(() => {
-      if (cancelado || !calleInputRef.current) return;
-      autocomplete = new google.maps.places.Autocomplete(calleInputRef.current, {
-        componentRestrictions: { country: 'cl' },
-        types: ['address'],
-        fields: ['address_components', 'geometry'],
+      if (cancelado || !autocompleteContainerRef.current) return;
+      elemento = new google.maps.places.PlaceAutocompleteElement({
+        includedRegionCodes: ['cl'],
       });
-      autocomplete.addListener('place_changed', () => {
-        const lugar = direccionDesdeLugar(autocomplete!.getPlace());
+      elemento.placeholder = 'Ej: Av. Apoquindo 3000';
+      elemento.className = 'w-full';
+
+      elemento.addEventListener('gmp-select', async (evento) => {
+        let place = evento.placePrediction.toPlace();
+        const { place: placeConDatos } = await place.fetchFields({
+          fields: ['addressComponents', 'location'],
+        });
+        place = placeConDatos;
+        const lugar = direccionDesdeLugar(place);
         if (lugar.calle) setValue('calle', lugar.calle, { shouldValidate: true });
         if (lugar.numero) setValue('numero', lugar.numero, { shouldValidate: true });
         if (lugar.comuna) setValue('comuna', lugar.comuna, { shouldValidate: true });
@@ -108,11 +129,20 @@ export default function FormularioPropiedad() {
             : null,
         );
       });
+      // Si el vendedor escribe y no elige ninguna sugerencia, igual
+      // queremos que "calle" quede con lo que escribió -- el host refleja
+      // el valor de su input interno en su propia propiedad `value`, que sí
+      // es pública aunque el shadow DOM sea cerrado.
+      elemento.addEventListener('input', () => {
+        setValue('calle', elemento!.value, { shouldValidate: false });
+      });
+
+      autocompleteContainerRef.current.appendChild(elemento);
     });
 
     return () => {
       cancelado = true;
-      if (autocomplete) google.maps.event.clearInstanceListeners(autocomplete);
+      elemento?.remove();
     };
   }, [setValue]);
 
@@ -186,15 +216,19 @@ export default function FormularioPropiedad() {
           error={errors.calle?.message}
           ayuda={hayGoogleMaps ? 'Empieza a escribir y elige una sugerencia: así capturamos la ubicación exacta para el mapa.' : undefined}
         >
-          <input
-            {...calleRegistro}
-            ref={(el) => {
-              calleRHFRef(el);
-              calleInputRef.current = el;
-            }}
-            className={INPUT}
-            autoComplete="off"
-          />
+          {hayGoogleMaps ? (
+            <div ref={autocompleteContainerRef} />
+          ) : (
+            <input
+              {...calleRegistro}
+              ref={(el) => {
+                calleRHFRef(el);
+                calleInputRef.current = el;
+              }}
+              className={INPUT}
+              autoComplete="off"
+            />
+          )}
           {ubicacion && (
             <span className="mt-1.5 flex items-center gap-1 text-xs text-cierre-700">
               <MapPin className="h-3.5 w-3.5" />

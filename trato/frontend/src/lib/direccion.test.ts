@@ -12,6 +12,10 @@ describe('normalizarRegion', () => {
     expect(normalizarRegion('Región Metropolitana de Santiago')).toBe('Metropolitana de Santiago');
   });
 
+  it('calza por substring cuando Google da el nombre corto (verificado en vivo: Places API New devuelve "Región Metropolitana", sin "de Santiago")', () => {
+    expect(normalizarRegion('Región Metropolitana')).toBe('Metropolitana de Santiago');
+  });
+
   it('saca el prefijo "Región del "', () => {
     expect(normalizarRegion("Región del Libertador General Bernardo O'Higgins")).toBe(
       "Libertador General Bernardo O'Higgins",
@@ -31,35 +35,44 @@ describe('normalizarRegion', () => {
 });
 
 describe('direccionDesdeLugar', () => {
-  it('arma calle, número, comuna, región y coordenadas desde address_components', () => {
+  // Fixture tomado de una respuesta real de Place Autocomplete (New) para
+  // "Av. Apoquindo 3000, Las Condes" (ver CLAUDE.md, sección Google Maps):
+  // Google devuelve `administrative_area_level_1` = "Región Metropolitana",
+  // no "...de Santiago".
+  it('arma calle, número, comuna, región y coordenadas desde addressComponents', () => {
     const lugar = {
-      address_components: [
-        { long_name: 'Pedro de Valdivia', short_name: 'Av. Pedro de Valdivia', types: ['route'] },
-        { long_name: '1234', short_name: '1234', types: ['street_number'] },
-        { long_name: 'Providencia', short_name: 'Providencia', types: ['administrative_area_level_3'] },
+      addressComponents: [
+        { longText: '3000', shortText: '3000', types: ['street_number'] },
+        { longText: 'Avenida Apoquindo', shortText: 'Av. Apoquindo', types: ['route'] },
+        { longText: 'Las Condes', shortText: 'Las Condes', types: ['locality', 'political'] },
         {
-          long_name: 'Región Metropolitana de Santiago',
-          short_name: 'RM',
-          types: ['administrative_area_level_1'],
+          longText: 'Las Condes',
+          shortText: 'Las Condes',
+          types: ['administrative_area_level_3', 'political'],
+        },
+        {
+          longText: 'Región Metropolitana',
+          shortText: 'RM',
+          types: ['administrative_area_level_1', 'political'],
         },
       ],
-      geometry: { location: { lat: () => -33.4263, lng: () => -70.6128 } },
+      location: { lat: () => -33.4170498, lng: () => -70.5987974 },
     };
 
     expect(direccionDesdeLugar(lugar)).toEqual({
-      calle: 'Pedro de Valdivia',
-      numero: '1234',
-      comuna: 'Providencia',
+      calle: 'Avenida Apoquindo',
+      numero: '3000',
+      comuna: 'Las Condes',
       region: 'Metropolitana de Santiago',
-      latitud: -33.4263,
-      longitud: -70.6128,
+      latitud: -33.4170498,
+      longitud: -70.5987974,
     });
   });
 
   it('cae a locality si no hay administrative_area_level_3', () => {
     const lugar = {
-      address_components: [
-        { long_name: 'Pueblo Chico', short_name: 'Pueblo Chico', types: ['locality'] },
+      addressComponents: [
+        { longText: 'Pueblo Chico', shortText: 'Pueblo Chico', types: ['locality'] },
       ],
     };
     expect(direccionDesdeLugar(lugar).comuna).toBe('Pueblo Chico');
