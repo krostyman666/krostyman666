@@ -250,8 +250,60 @@ corriendo desde `dist/` compilado (no sólo con `tsx`).
   navegador con el backend real (UF de hoy, $41.106 al momento de escribir
   esto) y con el backend caído (cae a la UF referencial fija sin romper la
   página).
-- **Mapa de una propiedad (`MapaPropiedad`): iframe de OpenStreetMap**, sin
-  dependencia ni API key. Alcanza para un solo punto.
+- **Mapa de una propiedad (`MapaPropiedad`): mapa interactivo de verdad, no un
+  iframe.** Antes era un embed estático de `embed.html` de OSM -- alcanzaba
+  para mostrar un punto, pero no para moverse ni hacer zoom dentro de la
+  ficha, como sí se espera de un portal inmobiliario. Ahora comparte
+  exactamente el mismo mecanismo de `MapaResultados`: Google Maps si hay
+  `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, Leaflet + OpenStreetMap si no (gratis,
+  sin llave, también arrastrable y con zoom). El punto se dibuja como círculo
+  verde (sector, ~120 m de radio, el mismo orden de magnitud que
+  `redondearSector` en el backend) o como marcador (ubicación exacta, tras
+  visita confirmada) según el flag `exacta` que ya traía el componente.
+  **Bug real encontrado y corregido al probarlo en navegador:** el efecto
+  que dibuja ese círculo/marcador dependía de que el mapa ya existiera
+  (`mapaRef.current`), pero ese ref lo llena un `import('leaflet')`
+  asíncrono -- si el efecto de dibujar corría antes de que el import
+  terminara (como corría siempre, no a veces, porque acá las coordenadas son
+  props ya conocidas al montar, a diferencia de `MapaResultados` donde
+  `propiedades` llega después por una consulta), se salía temprano y nunca
+  se volvía a disparar porque las coordenadas no cambian de nuevo: el
+  círculo quedaba sin dibujar en todos los casos. Se agregó un estado
+  `listo` que se fija al terminar la inicialización y entra en las
+  dependencias del efecto que dibuja. Verificado leyendo el DOM después del
+  fix: el `<path>` SVG del círculo aparece en el `leaflet-overlay-pane`
+  (antes del fix, ese pane quedaba vacío). Las teselas de OpenStreetMap no
+  cargan dentro de este sandbox (el Chromium de prueba no pasa por el proxy
+  TLS configurado del entorno, mismo motivo por el que `/propiedades` ya
+  mostraba el mapa en gris en sesiones anteriores) -- eso es una limitación
+  del entorno de pruebas, no del código: los controles de zoom, el arrastre
+  y el círculo SVG funcionan igual, y las teselas sí van a cargar en un
+  navegador real.
+- **El formulario de publicar (`FormularioPropiedad`) no capturaba
+  latitud/longitud en absoluto.** Por eso toda propiedad nacía sin ubicación
+  -- el mapa de arriba nunca tenía nada que dibujar salvo que alguien cargara
+  las coordenadas a mano por API. Con `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
+  configurada, el campo "Calle" usa Google Places Autocomplete
+  (`google.maps.places.Autocomplete`, restringido a Chile): al elegir una
+  sugerencia de la lista se completan calle, número, comuna y región
+  automáticamente, y las coordenadas quedan guardadas para enviarlas en el
+  POST. Sin API key el campo sigue siendo un input de texto común, sin
+  ningún cambio de comportamiento -- igual que `MapaResultados` y ahora
+  `MapaPropiedad`, "ningún código cambia" al agregar la llave después.
+  - **El mapeo de nombres (`lib/direccion.ts`) tiene una limitación
+    reconocida: no se verificó contra una cuenta real de Google Maps.**
+    Sin API key no hay forma de probarlo en vivo, así que `normalizarRegion`
+    (hace calzar lo que Google llama una región, ej. "Región de Valparaíso",
+    contra el enum fijo de `REGIONES`) y la extracción de comuna
+    (`administrative_area_level_3`, con fallback a `locality`) están escritas
+    con el comportamiento documentado de la API de Google, no confirmadas
+    contra una respuesta real. Si no calzan, no se inventa: la región o
+    comuna quedan sin tocar y el vendedor las corrige a mano, como ya podía
+    hacer antes de que existiera el autocompletado -- nunca se manda un valor
+    fuera del enum. **Pendiente: probar con una cuenta real apenas se
+    consiga la API key** y ajustar `normalizarRegion` si algún nombre no
+    calza como se esperaba. La lógica de parseo (no la respuesta de Google en
+    sí) está cubierta por `lib/direccion.test.ts`.
 - **Mapa de resultados (`MapaResultados`, en `/propiedades`): dos proveedores.**
   Un iframe no sirve para varios pines con comportamiento propio (clic,
   resaltado al pasar el mouse por la tarjeta), así que hace falta una librería

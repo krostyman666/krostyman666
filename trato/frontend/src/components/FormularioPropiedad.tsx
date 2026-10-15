@@ -1,12 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { MapPin } from 'lucide-react';
 import { api, mensajeDeError } from '@/lib/api';
 import { REGIONES, TIPOS_PROPIEDAD } from '@/lib/propiedades';
+import { cargarGooglePlaces, hayGoogleMaps } from '@/lib/mapa';
+import { direccionDesdeLugar } from '@/lib/direccion';
 
 // El formulario trabaja siempre con strings y la conversión a número ocurre una
 // sola vez, al enviar. Transformar dentro del esquema hace que el tipo de entrada
@@ -59,15 +62,59 @@ const INPUT =
 export default function FormularioPropiedad() {
   const router = useRouter();
   const [errorServidor, setErrorServidor] = useState<string | null>(null);
+  // Sólo se llenan al elegir una sugerencia del autocompletado de Google; si
+  // el vendedor escribe la calle a mano (o no hay API key configurada) quedan
+  // en null y la propiedad se publica sin coordenadas, igual que siempre.
+  const [ubicacion, setUbicacion] = useState<{ lat: number; lng: number } | null>(null);
+  const calleInputRef = useRef<HTMLInputElement | null>(null);
 
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<Campos>({
     resolver: zodResolver(esquema),
     defaultValues: { moneda: 'uf', tipo: 'departamento', tieneHipoteca: false, region: '' },
   });
+
+  const { ref: calleRHFRef, ...calleRegistro } = register('calle');
+
+  // Ata el Autocomplete de Google al input de "Calle" apenas hay API key.
+  // Sin key, `hayGoogleMaps` es false y el input se queda como un input
+  // normal -- la dirección sigue siendo 100% editable a mano, como antes de
+  // que existiera esto.
+  useEffect(() => {
+    if (!hayGoogleMaps) return;
+    let cancelado = false;
+    let autocomplete: google.maps.places.Autocomplete | undefined;
+
+    cargarGooglePlaces().then(() => {
+      if (cancelado || !calleInputRef.current) return;
+      autocomplete = new google.maps.places.Autocomplete(calleInputRef.current, {
+        componentRestrictions: { country: 'cl' },
+        types: ['address'],
+        fields: ['address_components', 'geometry'],
+      });
+      autocomplete.addListener('place_changed', () => {
+        const lugar = direccionDesdeLugar(autocomplete!.getPlace());
+        if (lugar.calle) setValue('calle', lugar.calle, { shouldValidate: true });
+        if (lugar.numero) setValue('numero', lugar.numero, { shouldValidate: true });
+        if (lugar.comuna) setValue('comuna', lugar.comuna, { shouldValidate: true });
+        if (lugar.region) setValue('region', lugar.region, { shouldValidate: true });
+        setUbicacion(
+          lugar.latitud !== null && lugar.longitud !== null
+            ? { lat: lugar.latitud, lng: lugar.longitud }
+            : null,
+        );
+      });
+    });
+
+    return () => {
+      cancelado = true;
+      if (autocomplete) google.maps.event.clearInstanceListeners(autocomplete);
+    };
+  }, [setValue]);
 
   async function enviar(datos: Campos) {
     setErrorServidor(null);
@@ -92,6 +139,8 @@ export default function FormularioPropiedad() {
         banos: aNumero(datos.banos),
         superficieConstruida: aNumero(datos.superficieConstruida),
         estacionamientos: aNumero(datos.estacionamientos) ?? 0,
+        latitud: ubicacion?.lat ?? null,
+        longitud: ubicacion?.lng ?? null,
       });
       router.push(`/propiedades/${data.propiedad.id}/documentos`);
     } catch (error) {
@@ -132,8 +181,26 @@ export default function FormularioPropiedad() {
       </Seccion>
 
       <Seccion titulo="Dirección">
-        <Campo etiqueta="Calle" error={errors.calle?.message}>
-          <input {...register('calle')} className={INPUT} />
+        <Campo
+          etiqueta="Calle"
+          error={errors.calle?.message}
+          ayuda={hayGoogleMaps ? 'Empieza a escribir y elige una sugerencia: así capturamos la ubicación exacta para el mapa.' : undefined}
+        >
+          <input
+            {...calleRegistro}
+            ref={(el) => {
+              calleRHFRef(el);
+              calleInputRef.current = el;
+            }}
+            className={INPUT}
+            autoComplete="off"
+          />
+          {ubicacion && (
+            <span className="mt-1.5 flex items-center gap-1 text-xs text-cierre-700">
+              <MapPin className="h-3.5 w-3.5" />
+              Ubicación detectada para el mapa.
+            </span>
+          )}
         </Campo>
         <div className="grid grid-cols-2 gap-2">
           <Campo etiqueta="Número" error={errors.numero?.message}>

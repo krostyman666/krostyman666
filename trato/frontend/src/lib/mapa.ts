@@ -12,14 +12,29 @@ export const hayGoogleMaps = GOOGLE_MAPS_API_KEY.length > 0;
 
 let configurado = false;
 
-/** Deja listos `google.maps.Map` y `google.maps.marker.AdvancedMarkerElement`. */
-export async function cargarGoogleMaps(): Promise<void> {
+function asegurarConfigurado(): void {
   if (!hayGoogleMaps) {
     throw new Error('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY no está configurada.');
   }
   if (!configurado) {
-    setOptions({ key: GOOGLE_MAPS_API_KEY });
+    // `language`/`region` fijan español y sesgo a Chile en lo que devuelve la
+    // API (nombres de calle, comuna, región) -- sin esto el idioma depende del
+    // navegador de quien visita, y un vendedor con el navegador en inglés
+    // vería "Santiago Metropolitan Region" en vez de "Metropolitana de
+    // Santiago", que además no calza con nuestro enum de regiones.
+    setOptions({ key: GOOGLE_MAPS_API_KEY, language: 'es', region: 'CL' });
     configurado = true;
   }
+}
+
+/** Deja listos `google.maps.Map` y `google.maps.marker.AdvancedMarkerElement`. */
+export async function cargarGoogleMaps(): Promise<void> {
+  asegurarConfigurado();
   await Promise.all([importLibrary('maps'), importLibrary('marker')]);
+}
+
+/** Deja listo `google.maps.places.Autocomplete`, para el formulario de publicar. */
+export async function cargarGooglePlaces(): Promise<void> {
+  asegurarConfigurado();
+  await importLibrary('places');
 }
