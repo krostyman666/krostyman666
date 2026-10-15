@@ -403,6 +403,16 @@ Cuatro reglas que no son obvias y conviene no romper:
 - **Observar exige motivo.** Una observación sin explicación deja al vendedor
   bloqueado sin saber qué corregir.
 
+**`responsable` es informativo, no un permiso.** Dice en la UI quién
+normalmente gestiona cada papel ("lo gestiona Trato" vs "lo gestiona
+vendedor"), pero `subirArchivo` en `documentos.service.ts` sólo verifica que
+la propiedad sea del vendedor, nunca el `responsable` del documento. Un
+vendedor puede subir el certificado de dominio vigente o el de avalúo fiscal
+él mismo si ya lo tiene -- de hecho el avalúo fiscal se obtiene público por
+rol en sii.cl, igual que las contribuciones por rol en tesoreria.cl -- sin
+esperar a que Trato lo gestione. No hace falta ningún cambio para esto: ya
+funciona así.
+
 Los plazos de vigencia del catálogo llevan advertencia en el archivo: hay que
 confirmarlos con abogado antes de producción.
 
@@ -596,11 +606,21 @@ documentada, pero ambos son consultables por cualquiera, no sólo por el dueño.
   llave que se revoca cambiando una variable es más simple y más segura que un
   JWT de 7 días rotando en un flujo externo. Ver
   `backend/src/middleware/autenticarIntegracion.ts`.
-- `informes.service.ts` lee la caché primero; si está vacía o vieja, el avalúo
-  cae a `sii.service.ts` (un proveedor pagado tipo BaseAPI, si se contrató
-  uno) y las contribuciones caen al certificado del expediente
-  (`deuda_contribuciones`) si está `conforme`. Sólo si nada de eso hay, se
-  muestra "fuente por conectar".
+- `informes.service.ts` lee la caché primero; si está vacía o vieja, el
+  avalúo cae a `sii.service.ts` (un proveedor pagado tipo BaseAPI, si se
+  contrató uno) y, si tampoco hay eso, **al certificado del expediente
+  (`avaluo_fiscal`) si está `conforme`** -- igual que las contribuciones
+  caen al suyo (`deuda_contribuciones`). Sólo si nada de eso hay, se
+  muestra "fuente por conectar". El avalúo no tenía este último paso hasta
+  que se agregó (antes sólo contribuciones lo tenía, sin razón real para la
+  asimetría: el avalúo también se obtiene público por rol en sii.cl, así
+  que es igual de plausible que el vendedor ya tenga el PDF a mano como que
+  tenga la boleta de contribuciones). Verificado de punta a punta: el
+  vendedor sube el certificado, la notaría lo aprueba, y el informe gratis
+  deja de decir "fuente por conectar" para mostrar la fecha de emisión y un
+  aviso de que el detalle está en el documento -- sin tocar el frontend,
+  porque `VistaInforme.tsx` ya sabía renderizar ese mismo par de campos
+  (`vigenciaHasta`/`advertencia`) para contribuciones.
 - **Quién puebla la caché**: para Tesorería hay un workflow de n8n real,
   armado y guardado -- no sólo documentado -- en la cuenta de n8n del dueño
   del proyecto: ["Trato - Contribuciones (Tesorería)"](https://krostyman666.app.n8n.cloud/workflow/neHHeekLAE0LtnDj),
@@ -707,13 +727,19 @@ documentada, pero ambos son consultables por cualquiera, no sólo por el dueño.
   dato en el informe.
 
 **¿Existe alguna API oficial de SII o Tesorería?** No. Ninguna de las dos
-publica una API documentada para avalúo fiscal ni contribuciones por rol. Lo
-único con API real es BaseAPI.cl (de pago, con SDK en TypeScript), que además
-de avalúo fiscal también cubre Tesorería
-(`api.baseapi.cl/v1/tgr/cartola` -- cartola fiscal y certificado de deuda).
-Si en algún momento conviene pagar por confiabilidad en vez de depender del
-scraping, ese es el proveedor a evaluar primero para ambos, no sólo para el
-avalúo.
+publica una API documentada para avalúo fiscal ni contribuciones por rol, ni
+hay registro público de que alguna ofrezca convenio de datos a terceros
+privados. BaseAPI.cl (de pago, con SDK en TypeScript) tiene lo más parecido
+a una API real para ambos, pero su propia página no explica el mecanismo
+(no dice scraping, no dice convenio oficial) -- todo indica que resuelven el
+mismo problema de automatización que nosotros, con más tolerancia al riesgo
+o infraestructura dedicada, no que el SII les abrió una puerta que a
+cualquiera más le cierra. **Su herramienta de avalúo fiscal específicamente
+se descontinúa el 11 de diciembre de 2026** (anunciado en su propia página),
+así que ya no es una opción de evaluar a largo plazo para esa pieza; para
+Tesorería (`api.baseapi.cl/v1/tgr/cartola`) sigue siendo el candidato si en
+algún momento conviene pagar por confiabilidad en vez de depender del
+scraping.
 
 **Advertencia que sigue vigente:** aun siendo público, es scraping de un
 portal del Estado. Identificarse honestamente, no golpear sus servidores, y

@@ -112,9 +112,13 @@ interface SeccionEmitida {
  * consulta el portal público por rol y empuja el resultado a
  * `Propiedad.avaluoFiscalCache` / `contribucionesCache` (ver
  * `integraciones.service.ts`). El informe lee esa caché primero; si está
- * vacía o vieja, cae a `consultarAvaluoFiscal` (un proveedor pagado, si se
- * contrató uno) para el avalúo, y al certificado del expediente para
- * contribuciones, antes de decir "fuente por conectar".
+ * vacía o vieja, el avalúo cae primero a `consultarAvaluoFiscal` (un
+ * proveedor pagado, si se contrató uno) y después al certificado del
+ * expediente si el vendedor ya lo subió y la notaría lo aprobó -- el SII no
+ * exige clave para consultarlo por rol, así que es tan plausible que el
+ * vendedor ya lo tenga a mano como que tenga la boleta de contribuciones.
+ * Las contribuciones caen directo al certificado del expediente. Recién si
+ * nada de eso hay, "fuente por conectar".
  */
 async function armarAntecedentes(
   propiedad: Propiedad,
@@ -137,6 +141,7 @@ async function armarAntecedentes(
     ? propiedad.contribucionesCache
     : null;
   const docContribuciones = documentos.find((d) => d.codigo === 'deuda_contribuciones');
+  const docAvaluoFiscal = documentos.find((d) => d.codigo === 'avaluo_fiscal');
 
   return seccionesDeNivel('antecedentes', ctx).map((seccion) => {
     const base = {
@@ -173,6 +178,16 @@ async function armarAntecedentes(
       case 'avaluo_fiscal': {
         if (avaluoCacheFresco) return { ...base, datos: { ...avaluoCacheFresco } };
         if (avaluo) return { ...base, datos: { ...avaluo } };
+        if (docAvaluoFiscal?.conforme) {
+          return {
+            ...base,
+            datos: {
+              vigenciaHasta: docAvaluoFiscal.fechaEmision,
+              advertencia:
+                'Certificado subido por el vendedor y aprobado por la notaría. Revisa el documento para el detalle del avalúo.',
+            },
+          };
+        }
         return {
           ...base,
           datos: null,
