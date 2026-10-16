@@ -1,9 +1,11 @@
 import {
+  CLAUSULA_POR_CODIGO,
   clausulasObligatorias,
   cumpleElArticulo,
   DatosParaVerificar,
   estaCompleta,
   marcadoresPendientes,
+  TASA_COMISION_TRATO,
   verificar1554,
 } from './promesa';
 
@@ -33,6 +35,30 @@ describe('clausulasObligatorias', () => {
     for (const c of clausulasObligatorias(true)) {
       expect(c.tipo).toBe('obligatoria');
     }
+  });
+
+  it('incluye la comisión de Trato, con y sin hipoteca -- no depende de la propiedad', () => {
+    expect(clausulasObligatorias(false).map((c) => c.codigo)).toContain('comision_trato');
+    expect(clausulasObligatorias(true).map((c) => c.codigo)).toContain('comision_trato');
+  });
+});
+
+describe('comision_trato', () => {
+  it('es obligatoria pero no satisface ningún numeral del 1554', () => {
+    const def = CLAUSULA_POR_CODIGO.get('comision_trato')!;
+    expect(def.tipo).toBe('obligatoria');
+    expect(def.satisface).toBeUndefined();
+  });
+
+  it('la tasa es 1%, la misma que usa la calculadora de ahorro', () => {
+    expect(TASA_COMISION_TRATO).toBe(0.01);
+  });
+
+  it('la plantilla deja marcadores para el monto y la razón social de Trato', () => {
+    const def = CLAUSULA_POR_CODIGO.get('comision_trato')!;
+    expect(marcadoresPendientes(def.plantilla)).toEqual(
+      expect.arrayContaining(['tratoTitular', 'tratoRut', 'comisionMonto']),
+    );
   });
 });
 

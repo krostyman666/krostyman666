@@ -901,6 +901,64 @@ aunque el dato estuviera. Los marcadores de las negociables —`{monto}`,
 `{porcentaje}`, `{banco}`— sí quedan para que las partes los llenen: son
 términos que se negocian, no datos que ya tengamos.
 
+### La comisión de Trato se amarra en la propia promesa
+
+Hasta ahora **no existía ningún mecanismo que de verdad cobrara el 1% + IVA**
+que todo el modelo de negocio asume: `informes.service.ts` sólo mostraba
+`comisionTrato: '1% + IVA sobre el precio de venta'` como texto informativo en
+el informe gratis, y `dominio/economia.ts` lo usa como supuesto del modelo de
+rentabilidad -- ninguno de los dos efectivamente la retiene ni la cobra. Era
+un hueco real del negocio, no sólo documentación que faltaba.
+
+La cláusula **`comision_trato`** (`dominio/promesa.ts`) lo cierra: instruye al
+notario para que, de los fondos de la venta, retenga y pague la comisión de
+Trato directamente, con cargo al vendedor, antes de enterar el saldo -- igual
+que ya hace el alzamiento de una hipoteca con el banco. Es `tipo: 'obligatoria'`
+(nace con la promesa, no se puede quitar, bloquea `acordar()` hasta que ambas
+partes la acepten) pero **no lleva `satisface`**: a diferencia de las otras
+cuatro obligatorias, no satisface ningún numeral del 1554 -- no la exige el
+Código Civil, la exige Trato, porque sin ella la plataforma no tiene ninguna
+otra forma de cobrar una vez cerrada la venta. `quitarClausula`
+(`promesas.service.ts`) distingue el motivo del bloqueo: nulidad del 1554 para
+las cuatro clásicas ("sin ella la promesa sería nula"), necesidad de Trato
+para ésta ("es necesaria para que Trato pueda cobrar su comisión") -- el
+mensaje original ("sin ella la promesa sería nula") habría sido falso para
+esta cláusula, que no toca la validez civil del contrato.
+
+**`{tratoTitular}`/`{tratoRut}` se llenan desde `env.cuentaCobro`** (las mismas
+`COBRO_TITULAR`/`COBRO_RUT` que ya usa `instruccionesTransferencia()` para
+cobrar informes): es la única razón social/RUT de Trato que el sistema ya
+tiene, y reusarla evita inventar una identidad legal nueva para una
+instrucción que va a terminar en una escritura pública real. Si esas
+variables no están configuradas, los marcadores quedan sin llenar y la
+cláusula no se puede aceptar -- mismo guard genérico que ya protege a
+`{fojas}`, `{precio}`, etc. **Pendiente: confirmar con abogado que la
+redacción de la instrucción notarial es la correcta** antes de usarla en una
+operación real -- mismo criterio que el resto del catálogo de cláusulas y de
+la minuta.
+
+Verificado de punta a punta contra una base real: se abrió una promesa real
+(propiedad de UF 10.000), la cláusula nació sola con el texto completo
+("retenga y pague directamente a Trato SpA, RUT 77.123.456-7, la suma de UF
+119..." -- 10.000 × 1% × 1,19 de IVA = 119, correcto), un intento de
+`DELETE` la rechazó con el mensaje nuevo, y el vendedor la aceptó sin
+problema.
+
+Dos cosas deliberadamente fuera de este cambio, decididas por el dueño del
+producto:
+
+- **No hay firma electrónica avanzada (FEA) todavía, y no es la prioridad
+  ahora mismo.** Se investigó: en Chile la FEA sólo la emiten PSC acreditados
+  (Ley 19.799), no hay API de autoservicio, y ClaveÚnica no es un atajo
+  directo para una empresa privada. El punto de entrada (`env.firma.proveedor`
+  en `dominio/firma.ts`) sigue ahí para cuando se contrate un proveedor.
+- **La notaría/gestión la resuelve un socio externo ("Portal Firma"), no la
+  plataforma.** El dueño tiene un contacto directo que gestiona con notarios;
+  Trato no necesita construir ni elegir una notaría recomendada en código --
+  `/notarias` ya lista notarías por comuna para quien quiera elegir otra. La
+  cláusula de comisión es independiente de qué notaría ejecute la escritura:
+  no necesita saber nada técnico de ese socio para funcionar.
+
 ## La firma de la promesa
 
 `backend/src/dominio/firma.ts`. La promesa es un contrato entre las partes, no

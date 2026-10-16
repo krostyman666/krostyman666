@@ -12,6 +12,15 @@
  * cláusulas que las partes acuerdan. El sistema las mueve entre las dos, deja
  * el rastro de quién propuso qué, y exige que ambas acepten el mismo texto.
  *
+ * NO TODA OBLIGATORIA VIENE DEL 1554. `comision_trato` también es
+ * `tipo: 'obligatoria'` (no se puede quitar, nace con la promesa) pero no
+ * lleva `satisface`: no la exige el Código Civil, la exige Trato, porque sin
+ * ella la plataforma no tiene ningún mecanismo para cobrar su comisión una
+ * vez cerrada la venta -- el vendedor tendría que pagarla por su cuenta,
+ * voluntariamente, después del hecho. `quitarClausula` (promesas.service.ts)
+ * distingue el motivo al bloquear el borrado: nulidad del 1554 para las
+ * cuatro clásicas, necesidad de Trato para ésta.
+ *
  * ADVERTENCIA: los textos de acá son plantillas para negociar, no un contrato
  * listo para firmar. La promesa final la revisa un abogado antes de la firma
  * —para eso existe el rol— y los montos y porcentajes por defecto son prácticas
@@ -69,6 +78,12 @@ export const REQUISITOS_1554: RequisitoLegal[] = [
       'El inmueble, el precio y la forma de pago tienen que estar determinados. Una promesa que deja el precio "a convenir" es nula.',
   },
 ];
+
+/** Duplicado a propósito de `frontend/src/lib/comision.ts` y
+ * `dominio/bot.catalogo.ts`: es la misma decisión comercial repetida en tres
+ * lugares, no un cálculo que diverja. Se unifica en `shared/` cuando exista. */
+export const TASA_COMISION_TRATO = 0.01;
+export const IVA = 0.19;
 
 export const TIPOS_CLAUSULA = ['obligatoria', 'negociable'] as const;
 export type TipoClausula = (typeof TIPOS_CLAUSULA)[number];
@@ -132,6 +147,17 @@ export const CLAUSULAS: DefinicionClausula[] = [
       'Prometer la venta de un inmueble hipotecado sin decir cómo se alza deja al comprador comprando la deuda. El 1554 Nº2 exige que el contrato prometido no sea de los que la ley declara ineficaces.',
     plantilla:
       'El promitente vendedor se obliga a alzar, a su costa y antes de la escritura de compraventa, la hipoteca que grava el inmueble a favor de {banco}, y a acompañar el certificado de gravámenes que acredite el alzamiento.',
+  },
+  {
+    codigo: 'comision_trato',
+    titulo: 'Comisión de Trato por la gestión de la operación',
+    tipo: 'obligatoria',
+    queDice:
+      'Instruye al notario para que pague la comisión de Trato directamente de los fondos de la venta, antes de enterar el saldo al vendedor.',
+    porQueImporta:
+      'Sin esta instrucción, Trato depende de que el vendedor pague la comisión por su cuenta después de cerrada la venta -- hoy la plataforma no tiene ningún otro mecanismo para cobrarla. Dejarla como instrucción notarial la amarra al mismo acto de la escritura, igual que ya ocurre con el alzamiento de una hipoteca. No satisface ningún numeral del 1554: es un requisito de Trato, no de la ley, y por eso no se puede quitar aunque no haga nula la promesa si se quitara.',
+    plantilla:
+      'Las partes dejan constancia de que la presente compraventa fue gestionada íntegramente a través de la plataforma Trato, y por ello instruyen al notario autorizante para que, de los fondos que reciba por concepto del precio de esta compraventa, retenga y pague directamente a {tratoTitular}, RUT {tratoRut}, la suma de {comisionMonto} (equivalente al 1% del precio de venta más IVA) por concepto de la gestión de la operación, con cargo a la parte vendedora y en forma previa a enterar el saldo del precio al vendedor.',
   },
   {
     codigo: 'condicion_credito',

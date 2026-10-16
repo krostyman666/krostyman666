@@ -15,9 +15,12 @@ import {
   estaCompleta,
   marcadoresPendientes,
   verificar1554,
+  TASA_COMISION_TRATO,
+  IVA,
   type EstadoRequisito,
 } from '../dominio/promesa';
 import { generarMinuta } from '../dominio/minuta';
+import { env } from '../config/env';
 
 const ESTADOS_ABIERTOS = ['negociando', 'acordada'];
 
@@ -71,6 +74,18 @@ function armarTexto(codigo: string, propiedad: Propiedad, promesa: Promesa): str
     // La fecha de escritura la da el comprador al abrir; llena el plazo, que es
     // cláusula obligatoria. Sin esto quedaba con {fecha} y no se podía aceptar.
     fecha: formatearFecha(promesa.fechaEscritura),
+    // Para "comision_trato". Reusa la misma cuenta configurada para cobrar
+    // informes (env.cuentaCobro): es la única razón social/RUT de Trato que
+    // el sistema ya tiene. Sin COBRO_TITULAR/COBRO_RUT configurados, estos
+    // marcadores quedan sin llenar y la cláusula no se puede aceptar -- no
+    // se inventa una razón social para una instrucción que va a una
+    // escritura pública real.
+    comisionMonto: formatearPrecio(
+      promesa.precio * TASA_COMISION_TRATO * (1 + IVA),
+      promesa.moneda,
+    ),
+    tratoTitular: env.cuentaCobro.titular || null,
+    tratoRut: env.cuentaCobro.rut || null,
   };
 
   return def.plantilla.replace(/\{(\w+)\}/g, (marcador, clave: string) => {
@@ -299,9 +314,13 @@ export async function quitarClausula(
 
   const def = CLAUSULA_POR_CODIGO.get(clausula.codigo);
   if (def?.tipo === 'obligatoria') {
-    throw ErrorApi.solicitudInvalida(
-      `"${def.titulo}" no se puede quitar: sin ella la promesa sería nula.`,
-    );
+    // Las cuatro del 1554 anulan la promesa si faltan; `comision_trato` no
+    // es una de ellas (no lleva `satisface`) -- la razón por la que no se
+    // puede quitar es distinta y el mensaje no debe confundirlas.
+    const motivo = def.satisface
+      ? 'sin ella la promesa sería nula'
+      : 'es necesaria para que Trato pueda cobrar su comisión en esta venta';
+    throw ErrorApi.solicitudInvalida(`"${def.titulo}" no se puede quitar: ${motivo}.`);
   }
 
   await clausula.destroy();
