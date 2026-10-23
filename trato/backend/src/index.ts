@@ -20,6 +20,7 @@ import brechasRoutes from './routes/brechas.routes';
 import ufRoutes from './routes/uf.routes';
 import avisosVencimientoRoutes from './routes/avisos-vencimiento.routes';
 import { manejarErrores, rutaNoEncontrada } from './middleware/manejarErrores';
+import { registrarValidacionDeIds } from './middleware/validarIdRuta';
 import './models/Usuario';
 import './models/Propiedad';
 import './models/Socio';
@@ -54,6 +55,31 @@ app.get('/health', (_req, res) => {
 app.get('/api/v1', (_req, res) => {
   res.json({ servicio: 'Trato API', version: '0.1.0' });
 });
+
+// Se registra en todos los routers, no sólo en los que hoy declaran un
+// parámetro de id: en los que no lo usan es un no-op (el callback de
+// `param` nunca dispara si la ruta no tiene ese nombre), y así una ruta
+// nueva con `:algoId` queda cubierta sola, sin depender de acordarse de
+// sumar el router acá -- que es exactamente el error en el que se cayó al
+// escribir esto la primera vez (quedaron fuera `visitasRoutes`,
+// `notariasRoutes` e `integracionesRoutes`, encontrado recién al revisar
+// cada archivo de rutas a mano).
+registrarValidacionDeIds(
+  authRoutes,
+  propiedadesRoutes,
+  notariasRoutes,
+  visitasRoutes,
+  informesRoutes,
+  economiaRoutes,
+  datosPersonalesRoutes,
+  pagosRoutes,
+  promesasRoutes,
+  botRoutes,
+  integracionesRoutes,
+  brechasRoutes,
+  ufRoutes,
+  avisosVencimientoRoutes,
+);
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/propiedades', propiedadesRoutes);

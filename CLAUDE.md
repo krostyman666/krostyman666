@@ -475,6 +475,27 @@ proveedor, no pausar o pagar por ese otro proyecto.
   e ingreso comparten presupuesto por IP.
 - Validación Joi (backend) + Zod (frontend), RUT verificado en ambos lados
 - helmet, CORS restringido a `FRONTEND_URL`
+- **Un id de ruta mal formado no revienta como error interno.** Encontrado
+  probando la API a mano: `GET /informes/undefined` (un bug real de
+  cliente, no hipotético -- así se manifiesta cuando algo en el frontend no
+  terminó de resolver un id antes de armar la URL) llegaba intacto hasta
+  Sequelize y volvía como `500 error_interno` con el mensaje crudo de
+  Postgres ("invalid input syntax for type uuid"). Cualquier ruta con
+  `:id`/`:informeId`/`:pagoId`/etc. tenía el mismo problema, porque ninguna
+  valida el formato antes de consultar. `backend/src/middleware/validarIdRuta.ts`
+  lo corta antes: usa `router.param()` de Express para interceptar esos
+  nombres de parámetro y devolver `404 no_encontrado` -- el mismo código que
+  ya usan los servicios cuando el id es válido pero no existe, porque quien
+  llama no puede ni necesita distinguir las dos cosas. **Ojo con un detalle
+  no obvio de Express ya pisado una vez al escribir esto**: `app.param()`
+  registrado sobre `app` no se hereda a los routers montados con `app.use()`
+  -- hay que llamar `.param()` en cada router. Por eso `registrarValidacionDeIds`
+  recibe la lista completa de routers (todos, no sólo los que hoy usan esos
+  nombres: en los que no, es un no-op, y así una ruta nueva con `:algoId`
+  queda cubierta sola). Verificado contra el backend real: un id
+  malformado en `/informes`, `/visitas`, `/pagos` y `/promesas` da 404 limpio
+  sin tocar la base de datos; un id válido pero inexistente sigue devolviendo
+  el mismo 404 de siempre; las rutas sin ese parámetro no se tocan.
 
 ## El dominio: expediente de documentos
 
