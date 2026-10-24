@@ -9,6 +9,8 @@ import {
 import { Documento } from '../models/Documento';
 import { Usuario } from '../models/Usuario';
 import { documentosAplicables } from '../dominio/documentos.catalogo';
+import { cumpleMinimoDePublicacion, PRECIO_MINIMO_PUBLICACION_UF } from '../dominio/propiedad';
+import { obtenerUf } from './uf.service';
 import { redondearSector } from '../utils/geo';
 import { ErrorApi } from '../utils/ErrorApi';
 
@@ -232,12 +234,40 @@ async function exigirPropia(id: string, vendedorId: string): Promise<Propiedad> 
   return propiedad;
 }
 
+/**
+ * Trato publica desde UF 5.000 (ver `dominio/propiedad.ts`). Se verifica acá,
+ * no sólo en el formulario, por el mismo motivo que el resto de las reglas de
+ * negocio de este archivo: el guard que sólo vive en la UI se salta con un
+ * POST directo. Se llama en dos momentos -- al publicar, y al editar el
+ * precio o la moneda de una propiedad que ya está publicada -- para que no se
+ * pueda bajar el precio bajo el mínimo después de publicada tampoco.
+ */
+async function exigirMinimoDePublicacion(precio: number, moneda: Moneda): Promise<void> {
+  const { valorClp } = await obtenerUf();
+  if (!cumpleMinimoDePublicacion(precio, moneda, valorClp)) {
+    throw ErrorApi.solicitudInvalida(
+      `Trato publica propiedades desde UF ${PRECIO_MINIMO_PUBLICACION_UF.toLocaleString('es-CL')}. Esta propiedad queda bajo ese mínimo.`,
+      'bajo_minimo_publicacion',
+    );
+  }
+}
+
 export async function actualizar(
   id: string,
   vendedorId: string,
   cambios: Record<string, unknown>,
 ): Promise<Propiedad> {
   const propiedad = await exigirPropia(id, vendedorId);
+
+  // Sólo importa si la propiedad ya está publicada: mientras es borrador, el
+  // vendedor puede escribir cualquier precio provisorio sin que el mínimo lo
+  // frene a mitad de llenar el formulario -- el guard real es al publicar.
+  if (propiedad.estado === 'publicada' && ('precio' in cambios || 'moneda' in cambios)) {
+    const precio = (cambios.precio as number | undefined) ?? propiedad.precio;
+    const moneda = (cambios.moneda as Moneda | undefined) ?? propiedad.moneda;
+    await exigirMinimoDePublicacion(precio, moneda);
+  }
+
   return propiedad.update(cambios);
 }
 
@@ -256,6 +286,9 @@ export async function cambiarEstado(
       'El estado "vendida" no se marca a mano: se fija solo cuando la notaría aprueba la inscripción de dominio.',
       'vendida_no_manual',
     );
+  }
+  if (estado === 'publicada') {
+    await exigirMinimoDePublicacion(propiedad.precio, propiedad.moneda);
   }
   return propiedad.update({ estado });
 }

@@ -198,7 +198,11 @@ export default function FormularioPropiedad() {
           </select>
         </Campo>
         <div className="grid grid-cols-[1fr_auto] gap-2">
-          <Campo etiqueta="Precio" error={errors.precio?.message}>
+          <Campo
+            etiqueta="Precio"
+            error={errors.precio?.message}
+            ayuda="Trato publica propiedades desde UF 5.000."
+          >
             <input {...register('precio')} inputMode="numeric" className={INPUT} placeholder="9500" />
           </Campo>
           <Campo etiqueta="Moneda">

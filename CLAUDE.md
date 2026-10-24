@@ -16,6 +16,7 @@ chilenos para decir "sin corredor" — la marca explica el producto y captura es
 | Login (UI + API) | Listo, probado en navegador |
 | Panel `/panel` con guard de sesión | Listo, probado en navegador |
 | Publicar propiedad + expediente de documentos | Listo, probado en navegador |
+| Mínimo de UF 5.000 para publicar (foco en alto valor) | Listo, probado en navegador |
 | Búsqueda pública `/propiedades` con filtros, mapa y "buscar en esta zona" | Listo, probado en navegador |
 | Ficha pública `/propiedades/:id` con galería y mapa | Listo, probado en navegador |
 | Agendamiento de visitas (disponibilidad + cupos + reserva) | Listo, probado en navegador |
@@ -353,6 +354,50 @@ corriendo desde `dist/` compilado (no sólo con `tsx`).
     `administrative_area_level_3` y `locality` no coincidan. El fallback de
     "no se adivina, se deja en blanco y el vendedor corrige a mano" sigue
     siendo la red de seguridad si algún nombre no calza.
+- **Trato publica desde UF 5.000: decisión de foco en el segmento de alto
+  valor, no sólo el piso de rentabilidad.** `dominio/economia.ts` ya mostraba
+  que bajo ~UF 1.500 la operación pierde plata con 1% de comisión (ver
+  "Rentabilidad"), pero el mínimo de publicación se puso bastante más
+  arriba de ese punto de equilibrio a propósito: el dueño del producto
+  decidió apuntar directo al mercado inmobiliario de alto valor, donde el
+  ahorro de 1% + IVA contra el 2-5% + IVA del corredor se cuenta en
+  millones, no sólo validar que la plataforma no pierda plata en cada venta.
+  `dominio/propiedad.ts` (`PRECIO_MINIMO_PUBLICACION_UF`,
+  `cumpleMinimoDePublicacion`) es lógica pura -- recibe la UF del día ya
+  resuelta en vez de pedirla ella misma, así se prueba sin red ni DB.
+  - **Se verifica en el servicio, no sólo en el formulario.** Un vendedor
+    puede guardar cualquier precio mientras la propiedad es borrador --
+    todavía está llenando el formulario, no tiene sentido frenarlo a mitad
+    de camino -- pero `propiedades.service.ts` lo bloquea en dos momentos:
+    al pasar a `publicada` (`cambiarEstado`), y al editar el precio o la
+    moneda de una propiedad que ya está publicada (`actualizar`), para que
+    no se pueda bajar el precio bajo el mínimo después de publicada tampoco.
+    Mismo patrón que el resto de las reglas de negocio del proyecto: el
+    guard vive donde no se puede saltar con un POST directo, no sólo donde
+    se muestra.
+  - **El precio puede estar en UF o en pesos, y el mínimo está en UF** --
+    convertir necesita la UF real del día, así que el chequeo llama a
+    `obtenerUf()` (`uf.service.ts`, el mismo conector a mindicador.cl que ya
+    usa el resto del proyecto) antes de comparar. Verificado contra el
+    backend real con la UF del día (23-10-2026, $41.205,16): una propiedad
+    de UF 4.000 y otra de $150.000.000 (≈UF 3.640 ese día) se rechazan al
+    publicar con el mismo mensaje; UF 5.000 exacto y UF 8.400 publican sin
+    problema; bajar el precio de una ya publicada a UF 4.500 también se
+    rechaza.
+  - **El formulario de publicar avisa el mínimo antes de que el vendedor
+    llene todo y se encuentre con el rechazo recién al final** -- una ayuda
+    bajo el campo "Precio" en `FormularioPropiedad.tsx`, mismo patrón que la
+    ayuda del rol de avalúo. No duplica la conversión CLP↔UF del backend
+    (que depende de la UF del día): es sólo un aviso en UF, la fuente de
+    verdad real sigue siendo el rechazo del servicio.
+  - **De paso, al escribir el copy de la landing se encontró y corrigió un
+    error real, no cosmético**: la lista de "qué incluye" (`app/page.tsx`)
+    decía "Firma electrónica avanzada", pero el proyecto sólo tiene firma
+    electrónica simple implementada -- la FEA está pendiente de contratar un
+    proveedor (ver "La firma de la promesa"). Era publicidad engañosa real
+    bajo la Ley 19.496 (afirmar una característica que el producto no
+    tiene), no sólo una imprecisión de redacción. Se corrigió a "Firma
+    electrónica de la promesa".
 - **Mapa de resultados (`MapaResultados`, en `/propiedades`): dos proveedores.**
   Un iframe no sirve para varios pines con comportamiento propio (clic,
   resaltado al pasar el mouse por la tarjeta), así que hace falta una librería

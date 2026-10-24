@@ -49,7 +49,7 @@ const PAPELES = [
     icon: PenLine,
     titulo: 'Firmas y alzamientos',
     detalle:
-      'Firma electrónica avanzada, poderes y el alzamiento de hipoteca si la propiedad tiene crédito.',
+      'Firma electrónica de la promesa, poderes y el alzamiento de hipoteca si la propiedad tiene crédito.',
   },
 ];
 
@@ -131,7 +131,7 @@ export default function Home() {
             <div>
               <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-trato-700 shadow-carta ring-1 ring-trato-200">
                 <ShieldCheck className="h-3.5 w-3.5" />
-                Operación legal, sin corredor
+                Propiedades desde UF 5.000, sin corredor
               </span>
 
               <h1 className="mt-6 text-4xl font-bold leading-[1.08] tracking-tight text-tinta sm:text-5xl lg:text-6xl">
@@ -143,7 +143,8 @@ export default function Home() {
               <p className="mt-6 max-w-xl text-lg leading-relaxed text-tinta-suave">
                 Te entregamos todos los papeles, escrituras, impuestos y firmas que necesita tu
                 compraventa, con asesores que muestran la propiedad por ti. Pagas 1% + IVA en vez de
-                la comisión del corredor.
+                la comisión del corredor -- en una venta de alto valor, la diferencia se cuenta en
+                millones.
               </p>
 
               <div className="mt-8 flex flex-wrap gap-3">
